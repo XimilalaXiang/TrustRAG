@@ -6,6 +6,7 @@ import '../../../main.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../chat/pages/chat_page.dart';
 import '../../documents/pages/documents_page.dart';
+import '../../search/pages/workspace_search_page.dart';
 import '../../settings/pages/model_config_page.dart';
 import '../providers/workspace_provider.dart';
 
@@ -93,6 +94,11 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                 label: Text('工作区'),
               ),
               NavigationRailDestination(
+                icon: Icon(Icons.search_outlined),
+                selectedIcon: Icon(Icons.search),
+                label: Text('搜索'),
+              ),
+              NavigationRailDestination(
                 icon: Icon(Icons.settings_outlined),
                 selectedIcon: Icon(Icons.settings),
                 label: Text('设置'),
@@ -117,6 +123,8 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
       case 2:
         return _buildWorkspacesView();
       case 3:
+        return const WorkspaceSearchPage();
+      case 4:
         return _buildSettingsView();
       default:
         return const SizedBox.shrink();
