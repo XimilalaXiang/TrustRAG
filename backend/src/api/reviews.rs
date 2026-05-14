@@ -27,6 +27,12 @@ async fn create_review(
     Path(citation_id): Path<Uuid>,
     Json(input): Json<CreateReviewInput>,
 ) -> Result<Json<ReviewRecord>, AppError> {
+    tracing::info!(
+        citation_id = %citation_id,
+        reviewer_id = %auth.id,
+        status = %input.status,
+        "Creating citation review"
+    );
     let record = review::create_review(&state.pool, citation_id, auth.id, &input).await?;
     Ok(Json(record))
 }

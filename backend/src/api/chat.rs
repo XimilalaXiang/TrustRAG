@@ -250,7 +250,14 @@ async fn send_message(
     Path((ws_id, conv_id)): Path<(Uuid, Uuid)>,
     Json(req): Json<SendMessageRequest>,
 ) -> Result<impl IntoResponse, AppError> {
-    // Verify conversation ownership
+    tracing::info!(
+        user_id = %auth.id,
+        workspace_id = %ws_id,
+        conversation_id = %conv_id,
+        query_len = req.content.len(),
+        "Chat message received"
+    );
+
     let conv = sqlx::query_as::<_, (Option<Uuid>, serde_json::Value)>(
         "SELECT model_config_id, document_scope
          FROM conversations WHERE id = $1 AND workspace_id = $2 AND user_id = $3",
@@ -432,7 +439,15 @@ fn build_sse_stream(
         let message_id = Uuid::new_v4();
         let start = std::time::Instant::now();
 
-        // message_start
+        tracing::info!(
+            message_id = %message_id,
+            workspace_id = %workspace_id,
+            conversation_id = %conv_id,
+            query_len = query.len(),
+            doc_scope_count = doc_scope.len(),
+            "SSE stream started"
+        );
+
         let start_data = serde_json::to_string(&MessageStartEvent {
             message_id,
             model: llm_provider.model_name().to_string(),
@@ -440,9 +455,15 @@ fn build_sse_stream(
         yield Ok(Event::default().event("message_start").data(start_data));
 
         let analysis = rag::analyze_query(&query, &history);
+        tracing::debug!(
+            needs_retrieval = analysis.needs_retrieval,
+            rewritten_query = %analysis.rewritten_query,
+            "Query analyzed"
+        );
 
         let sources: Vec<AssembledSource> = if analysis.needs_retrieval {
             let Some(emb_provider) = embedding_provider else {
+                tracing::error!(message_id = %message_id, "Embedding provider not configured");
                 yield Ok(Event::default().event("error").data("Embedding provider not configured. Please configure an embedding model."));
                 return;
             };
@@ -566,6 +587,7 @@ fn build_sse_stream(
                     sources
                 }
                 Err(e) => {
+                    tracing::error!(message_id = %message_id, error = %e, "Search failed");
                     yield Ok(Event::default().event("error").data(format!("Search error: {}", e)));
                     vec![]
                 }
