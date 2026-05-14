@@ -107,7 +107,15 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
           ),
           const VerticalDivider(width: 1),
           Expanded(
-            child: _buildContent(),
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 250),
+              switchInCurve: Curves.easeOut,
+              switchOutCurve: Curves.easeIn,
+              child: KeyedSubtree(
+                key: ValueKey<int>(_selectedIndex),
+                child: _buildContent(),
+              ),
+            ),
           ),
         ],
       ),
