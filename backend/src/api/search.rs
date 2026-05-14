@@ -63,7 +63,7 @@ async fn search(
 
     let config = SearchConfig {
         mode,
-        top_k: req.top_k.unwrap_or(10),
+        top_k: req.top_k.unwrap_or(10).min(100),
         min_score: req.min_score.unwrap_or(0.3),
         ..Default::default()
     };

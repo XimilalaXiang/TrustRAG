@@ -125,7 +125,7 @@ async fn create_config(
     auth: AuthUser,
     Json(req): Json<CreateEmbeddingConfigRequest>,
 ) -> Result<(StatusCode, Json<EmbeddingConfigResponse>), AppError> {
-    let valid_providers = ["openai", "local", "custom"];
+    let valid_providers = ["openai", "ollama", "local", "custom"];
     if !valid_providers.contains(&req.provider.as_str()) {
         return Err(AppError::BadRequest(format!(
             "Invalid provider '{}'. Must be one of: {}",
@@ -210,7 +210,7 @@ async fn update_config(
     }
 
     if let Some(provider) = &req.provider {
-        let valid = ["openai", "local", "custom"];
+        let valid = ["openai", "ollama", "local", "custom"];
         if !valid.contains(&provider.as_str()) {
             return Err(AppError::BadRequest(format!(
                 "Invalid provider '{}'",

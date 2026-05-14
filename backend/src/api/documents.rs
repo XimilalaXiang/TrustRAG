@@ -397,7 +397,8 @@ async fn download_file(
         _ => "application/octet-stream",
     };
 
-    let disposition = format!("attachment; filename=\"{}\"", filename);
+    let safe_filename = filename.replace('\\', "_").replace('"', "_");
+    let disposition = format!("attachment; filename=\"{}\"", safe_filename);
 
     Ok((
         [
@@ -566,7 +567,7 @@ async fn get_markdown(
         .await
         .map_err(|e| AppError::Internal(anyhow::anyhow!("Storage download failed: {e}")))?;
 
-    let filename = format!("{}.md", title.replace('/', "_"));
+    let filename = format!("{}.md", title.replace('/', "_").replace('\\', "_").replace('"', "_"));
     Ok((
         [
             (header::CONTENT_TYPE, "text/markdown; charset=utf-8".to_string()),

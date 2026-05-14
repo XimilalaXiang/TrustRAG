@@ -75,6 +75,9 @@ async fn create(
     }
 
     let visibility = req.visibility.unwrap_or_else(|| "private".to_string());
+    if !matches!(visibility.as_str(), "private" | "public") {
+        return Err(AppError::BadRequest("Visibility must be 'private' or 'public'".into()));
+    }
 
     let ws = sqlx::query_as::<_, WorkspaceResponse>(
         "INSERT INTO workspaces (name, description, owner_id, visibility) VALUES ($1, $2, $3, $4) RETURNING *",
@@ -130,6 +133,9 @@ async fn update(
     let name = req.name.unwrap_or(ws.name);
     let description = req.description.or(ws.description);
     let visibility = req.visibility.unwrap_or(ws.visibility);
+    if !matches!(visibility.as_str(), "private" | "public") {
+        return Err(AppError::BadRequest("Visibility must be 'private' or 'public'".into()));
+    }
 
     let updated = sqlx::query_as::<_, WorkspaceResponse>(
         "UPDATE workspaces SET name = $1, description = $2, visibility = $3 WHERE id = $4 RETURNING *",
