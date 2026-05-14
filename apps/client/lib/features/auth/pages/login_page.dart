@@ -116,7 +116,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                         obscureText: _obscurePassword,
                         validator: (v) {
                           if (v == null || v.isEmpty) return '请输入密码';
-                          if (v.length < 6) return '密码至少 6 个字符';
+                          if (v.length < 8) return '密码至少 8 个字符';
                           return null;
                         },
                         onFieldSubmitted: (_) => _handleLogin(),

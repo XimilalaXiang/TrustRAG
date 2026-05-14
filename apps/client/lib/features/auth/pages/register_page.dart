@@ -44,9 +44,9 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
       setState(() => _isLoading = false);
       if (success) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('注册成功，请登录')),
+          const SnackBar(content: Text('注册成功')),
         );
-        context.go('/login');
+        context.go('/dashboard');
       }
     }
   }
@@ -126,7 +126,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
                         obscureText: _obscurePassword,
                         validator: (v) {
                           if (v == null || v.isEmpty) return '请输入密码';
-                          if (v.length < 6) return '密码至少 6 个字符';
+                          if (v.length < 8) return '密码至少 8 个字符';
                           return null;
                         },
                       ),

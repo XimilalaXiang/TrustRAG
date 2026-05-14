@@ -58,7 +58,7 @@ class _DocumentsPageState extends ConsumerState<DocumentsPage> {
 
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
-      allowedExtensions: ['pdf', 'docx', 'txt'],
+      allowedExtensions: ['pdf', 'docx', 'txt', 'md', 'html'],
       allowMultiple: true,
       withData: true,
     );
