@@ -452,6 +452,30 @@ mod tests {
         }
         assert!(!valid.contains(&"invalid_provider"));
     }
+
+    #[test]
+    fn test_encrypt_special_characters() {
+        let key = "sk-proj-あいう!@#$%^&*()_+-=[]{}|;':\",./<>?";
+        let secret = "secret-with-special-chars!@#$";
+        let encrypted = encrypt_api_key(key, secret);
+        let decrypted = decrypt_api_key(&encrypted, secret).unwrap();
+        assert_eq!(decrypted, key, "Special characters should survive roundtrip");
+    }
+
+    #[test]
+    fn test_encrypt_long_key() {
+        let key = "a".repeat(1000);
+        let secret = "short";
+        let encrypted = encrypt_api_key(&key, secret);
+        let decrypted = decrypt_api_key(&encrypted, secret).unwrap();
+        assert_eq!(decrypted, key, "Long keys should survive roundtrip");
+    }
+
+    #[test]
+    fn test_decrypt_invalid_hex() {
+        let result = decrypt_api_key("not-valid-hex-zzzz", "secret");
+        assert!(result.is_none(), "Invalid hex should return None");
+    }
 }
 
 #[derive(Serialize)]

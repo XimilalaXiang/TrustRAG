@@ -339,4 +339,58 @@ mod tests {
         assert_eq!(config.mode, SearchMode::Hybrid);
         assert_eq!(config.top_k, 10);
     }
+
+    #[test]
+    fn test_rrf_fusion_empty_inputs() {
+        let results = rrf_fusion(&[], &[], 60.0, 10);
+        assert!(results.is_empty());
+    }
+
+    #[test]
+    fn test_rrf_fusion_one_side_empty() {
+        let vector_results = vec![
+            (Uuid::new_v4(), Uuid::new_v4(), "only in vector".into(), None, None, None, 0.9),
+        ];
+        let results = rrf_fusion(&vector_results, &[], 60.0, 10);
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].content, "only in vector");
+        let expected_score = 1.0 / (60.0 + 0.0 + 1.0);
+        assert!((results[0].relevance_score - expected_score).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_rrf_fusion_score_math_correctness() {
+        let id = Uuid::new_v4();
+        let doc_id = Uuid::new_v4();
+        let vector_results = vec![
+            (id, doc_id, "shared".into(), None, None, None, 0.9),
+        ];
+        let fulltext_results = vec![
+            (id, doc_id, "shared".into(), None, None, None, 0.8),
+        ];
+
+        let results = rrf_fusion(&vector_results, &fulltext_results, 60.0, 10);
+        assert_eq!(results.len(), 1);
+        let expected = 1.0 / 61.0 + 1.0 / 61.0;
+        assert!((results[0].relevance_score - expected).abs() < 1e-10,
+            "Score should be sum of both RRF contributions: expected {expected}, got {}",
+            results[0].relevance_score);
+    }
+
+    #[test]
+    fn test_rrf_fusion_ranking_stability() {
+        let ids: Vec<_> = (0..5).map(|_| Uuid::new_v4()).collect();
+        let doc_id = Uuid::new_v4();
+
+        let vector_results: Vec<_> = ids.iter()
+            .enumerate()
+            .map(|(i, &id)| (id, doc_id, format!("chunk_{}", i), None, None, None, 0.0))
+            .collect();
+
+        let results = rrf_fusion(&vector_results, &[], 60.0, 5);
+        for i in 0..results.len() - 1 {
+            assert!(results[i].relevance_score >= results[i + 1].relevance_score,
+                "Results should be sorted by descending score");
+        }
+    }
 }

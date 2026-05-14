@@ -87,4 +87,35 @@ mod tests {
         assert_eq!(snap.error_rate, 0.0);
         assert_eq!(snap.avg_latency_ms, 0.0);
     }
+
+    #[test]
+    fn test_metrics_concurrent_safety() {
+        use std::sync::Arc;
+        let m = Arc::new(Metrics::default());
+        let handles: Vec<_> = (0..10)
+            .map(|i| {
+                let m = m.clone();
+                std::thread::spawn(move || {
+                    for _ in 0..100 {
+                        m.record_request(10, i % 3 == 0);
+                    }
+                })
+            })
+            .collect();
+        for h in handles {
+            h.join().unwrap();
+        }
+        let snap = m.snapshot();
+        assert_eq!(snap.requests_total, 1000);
+    }
+
+    #[test]
+    fn test_metrics_snapshot_serialization() {
+        let m = create_metrics();
+        m.record_request(42, false);
+        let snap = m.snapshot();
+        let json = serde_json::to_string(&snap).unwrap();
+        assert!(json.contains("\"requests_total\":1"));
+        assert!(json.contains("\"avg_latency_ms\":42"));
+    }
 }

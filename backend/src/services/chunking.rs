@@ -239,4 +239,23 @@ The analysis was performed using standard statistical methods.
         assert_eq!(chunks.len(), 1);
         assert_eq!(chunks[0].content, "Small text");
     }
+
+    #[test]
+    fn test_whitespace_only_input() {
+        let config = ChunkConfig::default();
+        let chunks = chunk_markdown("   \n\n  \t  ", &config);
+        assert!(chunks.is_empty(), "Whitespace-only input should produce no chunks");
+    }
+
+    #[test]
+    fn test_no_content_loss_across_chunks() {
+        let md = "# Title\n\nParagraph 1.\n\n## Section\n\nParagraph 2.\n\n### Subsection\n\nParagraph 3.";
+        let config = ChunkConfig { target_chars: 40, overlap_chars: 0 };
+        let chunks = chunk_markdown(md, &config);
+        assert!(!chunks.is_empty());
+        let combined: String = chunks.iter().map(|c| c.content.as_str()).collect::<Vec<_>>().join(" ");
+        assert!(combined.contains("Paragraph 1"), "Content must not be lost: {combined}");
+        assert!(combined.contains("Paragraph 2"), "Content must not be lost: {combined}");
+        assert!(combined.contains("Paragraph 3"), "Content must not be lost: {combined}");
+    }
 }
