@@ -86,47 +86,55 @@ class AppTheme {
     final base = ThemeData.dark(useMaterial3: true);
     return base.copyWith(
       colorScheme: ColorScheme.fromSeed(
-        seedColor: _primaryColor,
+        seedColor: const Color(0xFF20B2AA),
         brightness: Brightness.dark,
-        surface: const Color(0xFF1A1A2E),
+        surface: const Color(0xFF1C1C1C),
         error: _errorColor,
       ),
+      scaffoldBackgroundColor: const Color(0xFF1C1C1C),
       textTheme: GoogleFonts.interTextTheme(base.textTheme),
       appBarTheme: AppBarTheme(
         elevation: 0,
-        scrolledUnderElevation: 1,
-        backgroundColor: const Color(0xFF16213E),
+        scrolledUnderElevation: 0,
+        backgroundColor: const Color(0xFF262626),
         titleTextStyle: GoogleFonts.inter(
           fontSize: 18,
           fontWeight: FontWeight.w600,
-          color: Colors.white,
+          color: const Color(0xFFF9FAFB),
         ),
       ),
       cardTheme: CardThemeData(
         elevation: 0,
-        color: const Color(0xFF16213E),
+        color: const Color(0xFF262626),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
-          side: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
+          side: const BorderSide(color: Color(0xFF3A3A3A)),
         ),
+      ),
+      navigationRailTheme: const NavigationRailThemeData(
+        backgroundColor: Color(0xFF1C1C1C),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: const Color(0xFF16213E),
+        fillColor: const Color(0xFF262626),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.2)),
+          borderSide: const BorderSide(color: Color(0xFF3A3A3A)),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.2)),
+          borderSide: const BorderSide(color: Color(0xFF3A3A3A)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: _primaryColor, width: 2),
+          borderSide: const BorderSide(color: Color(0xFF20B2AA), width: 2),
         ),
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      ),
+      dividerTheme: const DividerThemeData(
+        color: Color(0xFF3A3A3A),
+        thickness: 1,
       ),
     );
   }

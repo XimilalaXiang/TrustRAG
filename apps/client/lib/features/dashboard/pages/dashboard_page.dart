@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../main.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../chat/pages/chat_page.dart';
 import '../../documents/pages/documents_page.dart';
@@ -259,6 +260,36 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
               const SizedBox(height: 8),
               Card(
                 child: ListTile(
+                  leading: Icon(
+                    ref.watch(themeModeProvider) == ThemeMode.dark
+                        ? Icons.dark_mode
+                        : ref.watch(themeModeProvider) == ThemeMode.light
+                            ? Icons.light_mode
+                            : Icons.brightness_auto,
+                  ),
+                  title: const Text('外观'),
+                  subtitle: Text(_themeLabel(ref.watch(themeModeProvider))),
+                  trailing: SegmentedButton<ThemeMode>(
+                    segments: const [
+                      ButtonSegment(value: ThemeMode.light, icon: Icon(Icons.light_mode, size: 16)),
+                      ButtonSegment(value: ThemeMode.system, icon: Icon(Icons.brightness_auto, size: 16)),
+                      ButtonSegment(value: ThemeMode.dark, icon: Icon(Icons.dark_mode, size: 16)),
+                    ],
+                    selected: {ref.watch(themeModeProvider)},
+                    onSelectionChanged: (s) {
+                      ref.read(themeModeProvider.notifier).state = s.first;
+                    },
+                    showSelectedIcon: false,
+                    style: ButtonStyle(
+                      visualDensity: VisualDensity.compact,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Card(
+                child: ListTile(
                   leading: const Icon(Icons.info_outline),
                   title: const Text('关于'),
                   subtitle: const Text('TrustRAG v1.0.0'),
@@ -341,6 +372,17 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
         ],
       ),
     );
+  }
+
+  String _themeLabel(ThemeMode mode) {
+    switch (mode) {
+      case ThemeMode.light:
+        return '浅色';
+      case ThemeMode.dark:
+        return '深色';
+      case ThemeMode.system:
+        return '跟随系统';
+    }
   }
 
   Widget _infoRow(String label, String value) {
