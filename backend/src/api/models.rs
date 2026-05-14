@@ -458,7 +458,7 @@ async fn test_provider_connection(
     model_name: &str,
 ) -> anyhow::Result<String> {
     let client = reqwest::Client::new();
-    let base = api_base_url.trim_end_matches('/');
+    let base = crate::services::embedding::normalize_api_base(api_base_url);
 
     let models_url = format!("{}/models", base);
     let mut req = client.get(&models_url);

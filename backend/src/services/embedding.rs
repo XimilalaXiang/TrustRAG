@@ -9,6 +9,17 @@ use uuid::Uuid;
 
 use crate::traits::embedding_provider::EmbeddingProvider;
 
+/// Ensure api_base ends with /v1 for OpenAI-compatible APIs.
+/// async_openai appends /embeddings (etc.) to the base, so it must end with /v1.
+pub fn normalize_api_base(url: &str) -> String {
+    let trimmed = url.trim_end_matches('/');
+    if trimmed.ends_with("/v1") {
+        trimmed.to_string()
+    } else {
+        format!("{}/v1", trimmed)
+    }
+}
+
 pub struct OpenAIEmbeddingProvider {
     client: Client<OpenAIConfig>,
     model: String,
@@ -17,7 +28,8 @@ pub struct OpenAIEmbeddingProvider {
 
 impl OpenAIEmbeddingProvider {
     pub fn new(api_base_url: &str, api_key: Option<&str>, model: &str, dimensions: usize) -> Self {
-        let mut config = OpenAIConfig::new().with_api_base(api_base_url);
+        let base = normalize_api_base(api_base_url);
+        let mut config = OpenAIConfig::new().with_api_base(&base);
         if let Some(key) = api_key {
             config = config.with_api_key(key);
         }
@@ -137,5 +149,14 @@ mod tests {
         );
         assert_eq!(provider.dimensions(), 768);
         assert_eq!(provider.model_name(), "nomic-embed-text");
+    }
+
+    #[test]
+    fn test_normalize_api_base() {
+        assert_eq!(normalize_api_base("https://api.openai.com/v1"), "https://api.openai.com/v1");
+        assert_eq!(normalize_api_base("https://api.openai.com/v1/"), "https://api.openai.com/v1");
+        assert_eq!(normalize_api_base("https://ai-gateway.vercel.sh"), "https://ai-gateway.vercel.sh/v1");
+        assert_eq!(normalize_api_base("https://ai-gateway.vercel.sh/"), "https://ai-gateway.vercel.sh/v1");
+        assert_eq!(normalize_api_base("http://localhost:11434"), "http://localhost:11434/v1");
     }
 }

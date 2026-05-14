@@ -10,6 +10,7 @@ class Document {
   final String fileType;
   final int fileSize;
   final String processingStatus;
+  final String? processingError;
   final int? chunkCount;
   final DateTime createdAt;
 
@@ -20,6 +21,7 @@ class Document {
     required this.fileType,
     required this.fileSize,
     required this.processingStatus,
+    this.processingError,
     this.chunkCount,
     required this.createdAt,
   });
@@ -30,8 +32,9 @@ class Document {
       workspaceId: json['workspace_id'],
       originalFilename: json['original_filename'],
       fileType: json['file_type'] ?? 'unknown',
-      fileSize: json['file_size'] ?? 0,
+      fileSize: json['file_size_bytes'] ?? json['file_size'] ?? 0,
       processingStatus: json['processing_status'] ?? 'pending',
+      processingError: json['processing_error'],
       chunkCount: json['chunk_count'],
       createdAt: DateTime.parse(json['created_at']),
     );

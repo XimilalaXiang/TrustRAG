@@ -267,13 +267,27 @@ pub async fn hybrid_search(
         }
     };
 
+    let effective_min_score = if config.mode == SearchMode::Hybrid {
+        0.0
+    } else {
+        config.min_score
+    };
+
     let filtered: Vec<SearchResult> = results
         .into_iter()
-        .filter(|r| r.relevance_score >= config.min_score)
+        .filter(|r| r.relevance_score >= effective_min_score)
         .collect();
 
     let total = filtered.len();
     let elapsed = start.elapsed().as_millis() as u64;
+
+    tracing::info!(
+        mode = ?config.mode,
+        query_len = query.len(),
+        pre_filter_count = total,
+        elapsed_ms = elapsed,
+        "Search completed"
+    );
 
     Ok(SearchResponse {
         results: filtered,

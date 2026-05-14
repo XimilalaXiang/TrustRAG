@@ -25,11 +25,44 @@ class Conversation {
   }
 }
 
+class Citation {
+  final int index;
+  final String chunkId;
+  final String documentId;
+  final String? heading;
+  final int? page;
+  final double score;
+  final String text;
+
+  Citation({
+    required this.index,
+    required this.chunkId,
+    required this.documentId,
+    this.heading,
+    this.page,
+    required this.score,
+    required this.text,
+  });
+
+  factory Citation.fromJson(Map<String, dynamic> json) {
+    return Citation(
+      index: json['index'] ?? 0,
+      chunkId: json['chunk_id'] ?? '',
+      documentId: json['document_id'] ?? '',
+      heading: json['heading'],
+      page: json['page'],
+      score: (json['score'] ?? 0).toDouble(),
+      text: json['text'] ?? '',
+    );
+  }
+}
+
 class ChatMessage {
   final String id;
   final String role;
   final String content;
   final String? modelName;
+  final List<Citation> citations;
   final DateTime createdAt;
 
   ChatMessage({
@@ -37,6 +70,7 @@ class ChatMessage {
     required this.role,
     required this.content,
     this.modelName,
+    this.citations = const [],
     required this.createdAt,
   });
 
@@ -47,6 +81,17 @@ class ChatMessage {
       content: json['content'],
       modelName: json['model_name'],
       createdAt: DateTime.parse(json['created_at']),
+    );
+  }
+
+  ChatMessage copyWith({List<Citation>? citations}) {
+    return ChatMessage(
+      id: id,
+      role: role,
+      content: content,
+      modelName: modelName,
+      citations: citations ?? this.citations,
+      createdAt: createdAt,
     );
   }
 }

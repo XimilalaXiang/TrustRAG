@@ -117,10 +117,33 @@ async fn process_document_inner(
         .post(&parse_url)
         .multipart(form)
         .send()
-        .await?
-        .error_for_status()?;
+        .await
+        .map_err(|e| anyhow::anyhow!("[doc-processor] request failed: {}", e))?
+        .error_for_status()
+        .map_err(|e| anyhow::anyhow!("[doc-processor] returned error status: {}", e))?;
 
-    let parse_result: DocProcessorResponse = response.json().await?;
+    let response_bytes = response
+        .bytes()
+        .await
+        .map_err(|e| anyhow::anyhow!("[doc-processor] failed to read response body: {}", e))?;
+
+    tracing::info!(
+        "doc-processor response for {}: {} bytes",
+        doc_id,
+        response_bytes.len()
+    );
+
+    let parse_result: DocProcessorResponse = serde_json::from_slice(&response_bytes)
+        .map_err(|e| {
+            let preview = String::from_utf8_lossy(
+                &response_bytes[..response_bytes.len().min(500)],
+            );
+            anyhow::anyhow!(
+                "[doc-processor] failed to deserialize response: {}. Body preview: {}",
+                e,
+                preview
+            )
+        })?;
 
     // Step 3: Update document metadata
     sqlx::query(
@@ -193,9 +216,21 @@ async fn process_document_inner(
     // Step 7: Generate and store embeddings
     if let Some(provider) = embedding_provider {
         update_status(pool, doc_id, "embedding", None).await?;
+        tracing::info!(
+            "Generating embeddings for {} ({} chunks, model: {})",
+            doc_id,
+            chunk_texts.len(),
+            provider.model_name()
+        );
 
-        let embeddings = provider.embed_texts(&chunk_texts).await?;
-        store_chunk_embeddings(pool, &chunk_ids, &embeddings).await?;
+        let embeddings = provider
+            .embed_texts(&chunk_texts)
+            .await
+            .map_err(|e| anyhow::anyhow!("[embedding] failed to generate embeddings: {}", e))?;
+
+        store_chunk_embeddings(pool, &chunk_ids, &embeddings)
+            .await
+            .map_err(|e| anyhow::anyhow!("[embedding] failed to store embeddings: {}", e))?;
     }
 
     // Step 8: Mark as ready

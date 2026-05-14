@@ -23,6 +23,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   final _scrollController = ScrollController();
   bool _isSending = false;
   String _streamingContent = '';
+  List<Citation> _streamingCitations = [];
 
   @override
   void initState() {
@@ -69,6 +70,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     setState(() {
       _isSending = true;
       _streamingContent = '';
+      _streamingCitations = [];
     });
 
     _scrollToBottom();
@@ -140,6 +142,10 @@ class _ChatPageState extends ConsumerState<ChatPage> {
             final event = jsonDecode(jsonStr);
             if (eventType == 'message_start') {
               assistantId = event['message_id'] ?? '';
+            } else if (eventType == 'citation') {
+              setState(() {
+                _streamingCitations.add(Citation.fromJson(event));
+              });
             } else if (eventType == 'text_delta') {
               setState(() {
                 _streamingContent += event['delta'] ?? event['text'] ?? '';
@@ -152,6 +158,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                   id: assistantId,
                   role: 'assistant',
                   content: fullContent,
+                  citations: List.from(_streamingCitations),
                   createdAt: DateTime.now(),
                 );
                 ref.read(messagesProvider.notifier).state = [
@@ -161,6 +168,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
               }
               setState(() {
                 _streamingContent = '';
+                _streamingCitations = [];
               });
             }
           } catch (_) {}
@@ -352,21 +360,221 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
         constraints:
-            BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.6),
+            BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.65),
         margin: const EdgeInsets.symmetric(vertical: 6),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: isUser
-              ? Theme.of(context).colorScheme.primaryContainer
-              : Theme.of(context).colorScheme.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: isUser
-            ? Text(msg.content)
-            : MarkdownBody(
-                data: msg.content,
-                selectable: true,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: isUser
+                    ? Theme.of(context).colorScheme.primaryContainer
+                    : Theme.of(context).colorScheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(16),
               ),
+              child: isUser
+                  ? Text(msg.content)
+                  : MarkdownBody(
+                      data: msg.content,
+                      selectable: true,
+                    ),
+            ),
+            if (!isUser && msg.citations.isNotEmpty)
+              _buildCitationCards(msg.citations),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCitationCards(List<Citation> citations) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(left: 4, bottom: 6),
+            child: Text(
+              '引用来源 (${citations.length})',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+            ),
+          ),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: citations.map((c) => _buildCitationChip(c)).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCitationChip(Citation citation) {
+    final scorePercent = (citation.score * 100).toStringAsFixed(0);
+    return Tooltip(
+      richMessage: TextSpan(
+        children: [
+          TextSpan(
+            text: citation.text,
+            style: const TextStyle(fontSize: 12),
+          ),
+        ],
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: () => _showCitationDetail(citation),
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 280),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.3),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 22,
+                height: 22,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primary,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  '${citation.index + 1}',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: Theme.of(context).colorScheme.onPrimary,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (citation.heading != null && citation.heading!.isNotEmpty)
+                      Text(
+                        citation.heading!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+                      ),
+                    Row(
+                      children: [
+                        if (citation.page != null)
+                          Text(
+                            'p.${citation.page}',
+                            style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                          ),
+                        if (citation.page != null) const SizedBox(width: 6),
+                        Text(
+                          '$scorePercent%',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Theme.of(context).colorScheme.primary,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showCitationDetail(Citation citation) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Row(
+          children: [
+            Container(
+              width: 28,
+              height: 28,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.primary,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text(
+                '${citation.index + 1}',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Theme.of(context).colorScheme.onPrimary,
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                citation.heading ?? '引用 ${citation.index + 1}',
+                style: const TextStyle(fontSize: 16),
+              ),
+            ),
+          ],
+        ),
+        content: SizedBox(
+          width: 500,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (citation.page != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Row(
+                    children: [
+                      Icon(Icons.description_outlined, size: 16, color: Colors.grey.shade600),
+                      const SizedBox(width: 4),
+                      Text('第 ${citation.page} 页',
+                          style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
+                      const Spacer(),
+                      Text('相关度: ${(citation.score * 100).toStringAsFixed(1)}%',
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.primary,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                          )),
+                    ],
+                  ),
+                ),
+              const Divider(),
+              const SizedBox(height: 8),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 300),
+                child: SingleChildScrollView(
+                  child: Text(
+                    citation.text,
+                    style: const TextStyle(fontSize: 14, height: 1.6),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('关闭'),
+          ),
+        ],
       ),
     );
   }
@@ -376,16 +584,41 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       alignment: Alignment.centerLeft,
       child: Container(
         constraints:
-            BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.6),
+            BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.65),
         margin: const EdgeInsets.symmetric(vertical: 6),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: MarkdownBody(
-          data: '$_streamingContent▌',
-          selectable: true,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: _streamingContent.isEmpty
+                  ? Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text('思考中...', style: TextStyle(color: Colors.grey.shade500)),
+                      ],
+                    )
+                  : MarkdownBody(
+                      data: '$_streamingContent▌',
+                      selectable: true,
+                    ),
+            ),
+            if (_streamingCitations.isNotEmpty)
+              _buildCitationCards(_streamingCitations),
+          ],
         ),
       ),
     );

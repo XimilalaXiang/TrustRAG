@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../dashboard/providers/workspace_provider.dart';
 import '../providers/document_provider.dart';
+import 'document_viewer_page.dart';
 
 class DocumentsPage extends ConsumerStatefulWidget {
   const DocumentsPage({super.key});
@@ -13,12 +16,37 @@ class DocumentsPage extends ConsumerStatefulWidget {
 }
 
 class _DocumentsPageState extends ConsumerState<DocumentsPage> {
+  Timer? _refreshTimer;
+
   @override
   void initState() {
     super.initState();
     final ws = ref.read(selectedWorkspaceProvider);
     if (ws != null) {
       ref.read(documentProvider.notifier).loadDocuments(ws.id);
+    }
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
+  }
+
+  void _startAutoRefresh(List<Document> docs) {
+    _refreshTimer?.cancel();
+    final hasProcessing = docs.any((d) =>
+        d.processingStatus == 'processing' ||
+        d.processingStatus == 'chunking' ||
+        d.processingStatus == 'embedding' ||
+        d.processingStatus == 'pending');
+    if (hasProcessing) {
+      _refreshTimer = Timer(const Duration(seconds: 3), () {
+        final ws = ref.read(selectedWorkspaceProvider);
+        if (ws != null && mounted) {
+          ref.read(documentProvider.notifier).loadDocuments(ws.id);
+        }
+      });
     }
   }
 
@@ -97,6 +125,7 @@ class _DocumentsPageState extends ConsumerState<DocumentsPage> {
             loading: () => const Center(child: CircularProgressIndicator()),
             error: (e, _) => Center(child: Text('加载失败: $e')),
             data: (list) {
+              _startAutoRefresh(list);
               if (list.isEmpty) {
                 return Center(
                   child: Column(
@@ -125,20 +154,45 @@ class _DocumentsPageState extends ConsumerState<DocumentsPage> {
                   final doc = list[index];
                   return Card(
                     child: ListTile(
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => DocumentViewerPage(
+                              document: doc,
+                              workspaceId: ws.id,
+                            ),
+                          ),
+                        );
+                      },
                       leading: _fileIcon(doc.fileType),
                       title: Text(doc.originalFilename,
                           style: const TextStyle(fontWeight: FontWeight.w500)),
-                      subtitle: Row(
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(doc.fileSizeFormatted),
-                          const SizedBox(width: 12),
-                          _statusChip(doc.processingStatus),
-                          if (doc.chunkCount != null) ...[
-                            const SizedBox(width: 12),
-                            Text('${doc.chunkCount} 分块',
-                                style: TextStyle(
-                                    color: Colors.grey.shade600, fontSize: 12)),
-                          ],
+                          Row(
+                            children: [
+                              Text(doc.fileSizeFormatted),
+                              const SizedBox(width: 12),
+                              _statusChip(doc.processingStatus),
+                              if (doc.chunkCount != null) ...[
+                                const SizedBox(width: 12),
+                                Text('${doc.chunkCount} 分块',
+                                    style: TextStyle(
+                                        color: Colors.grey.shade600, fontSize: 12)),
+                              ],
+                            ],
+                          ),
+                          if (doc.processingStatus == 'failed' && doc.processingError != null)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 4),
+                              child: Text(
+                                doc.processingError!,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(fontSize: 11, color: Colors.red.shade400),
+                              ),
+                            ),
                         ],
                       ),
                       trailing: PopupMenuButton(
@@ -190,16 +244,26 @@ class _DocumentsPageState extends ConsumerState<DocumentsPage> {
   Widget _statusChip(String status) {
     Color color;
     String label;
+    bool isLoading = false;
     switch (status) {
       case 'ready':
         color = Colors.green;
         label = '就绪';
         break;
       case 'processing':
-      case 'chunking':
-      case 'embedding':
         color = Colors.orange;
-        label = '处理中';
+        label = '解析中';
+        isLoading = true;
+        break;
+      case 'chunking':
+        color = Colors.orange;
+        label = '分块中';
+        isLoading = true;
+        break;
+      case 'embedding':
+        color = Colors.blue;
+        label = '向量化中';
+        isLoading = true;
         break;
       case 'failed':
         color = Colors.red;
@@ -215,8 +279,24 @@ class _DocumentsPageState extends ConsumerState<DocumentsPage> {
         color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(12),
       ),
-      child: Text(label,
-          style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w500)),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (isLoading) ...[
+            SizedBox(
+              width: 10,
+              height: 10,
+              child: CircularProgressIndicator(
+                strokeWidth: 1.5,
+                color: color,
+              ),
+            ),
+            const SizedBox(width: 4),
+          ],
+          Text(label,
+              style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w500)),
+        ],
+      ),
     );
   }
 }

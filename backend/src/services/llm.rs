@@ -20,7 +20,7 @@ impl OpenAILlmProvider {
     ) -> Self {
         Self {
             client: reqwest::Client::new(),
-            api_base_url: api_base_url.trim_end_matches('/').to_string(),
+            api_base_url: crate::services::embedding::normalize_api_base(api_base_url),
             api_key: api_key.map(|s| s.to_string()),
             model: model.to_string(),
         }
