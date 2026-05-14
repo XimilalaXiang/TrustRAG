@@ -6,6 +6,7 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:streaming_markdown/streaming_markdown.dart';
 
 import '../../auth/providers/auth_provider.dart';
 import '../../dashboard/providers/workspace_provider.dart';
@@ -25,6 +26,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   bool _isSending = false;
   String _streamingContent = '';
   List<Citation> _streamingCitations = [];
+  StreamController<String>? _streamingTextController;
 
   @override
   void initState() {
@@ -68,6 +70,8 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     final msgs = ref.read(messagesProvider);
     ref.read(messagesProvider.notifier).state = [...msgs, userMsg];
 
+    _streamingTextController?.close();
+    _streamingTextController = StreamController<String>.broadcast();
     setState(() {
       _isSending = true;
       _streamingContent = '';
@@ -148,9 +152,11 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                 _streamingCitations.add(Citation.fromJson(event));
               });
             } else if (eventType == 'text_delta') {
+              final delta = event['delta'] ?? event['text'] ?? '';
               setState(() {
-                _streamingContent += event['delta'] ?? event['text'] ?? '';
+                _streamingContent += delta;
               });
+              _streamingTextController?.add(delta);
               _scrollToBottom();
             } else if (eventType == 'message_end') {
               final fullContent = _streamingContent;
@@ -167,6 +173,8 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                   aiMsg,
                 ];
               }
+              _streamingTextController?.close();
+              _streamingTextController = null;
               setState(() {
                 _streamingContent = '';
                 _streamingCitations = [];
@@ -684,10 +692,19 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                         Text('思考中...', style: TextStyle(color: Colors.grey.shade500)),
                       ],
                     )
-                  : MarkdownBody(
-                      data: '$_streamingContent▌',
-                      selectable: true,
-                    ),
+                  : _streamingTextController != null
+                      ? AnimatedMarkdown(
+                          stream: _streamingTextController!.stream,
+                          config: const AnimationConfig(
+                            mode: AnimationMode.token,
+                            chunkSize: 3,
+                          ),
+                          selectable: true,
+                        )
+                      : MarkdownBody(
+                          data: _streamingContent,
+                          selectable: true,
+                        ),
             ),
             if (_streamingCitations.isNotEmpty)
               _buildCitationCards(_streamingCitations),
