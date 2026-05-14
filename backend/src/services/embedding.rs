@@ -85,6 +85,74 @@ impl EmbeddingProvider for OpenAIEmbeddingProvider {
     }
 }
 
+pub struct OllamaEmbeddingProvider {
+    base_url: String,
+    model: String,
+    dimensions: usize,
+}
+
+impl OllamaEmbeddingProvider {
+    pub fn new(base_url: &str, model: &str, dimensions: usize) -> Self {
+        Self {
+            base_url: base_url.trim_end_matches('/').to_string(),
+            model: model.to_string(),
+            dimensions,
+        }
+    }
+}
+
+#[async_trait]
+impl EmbeddingProvider for OllamaEmbeddingProvider {
+    async fn embed_texts(&self, texts: &[String]) -> anyhow::Result<Vec<Vec<f32>>> {
+        if texts.is_empty() {
+            return Ok(vec![]);
+        }
+
+        let client = reqwest::Client::new();
+        let mut all_embeddings = Vec::with_capacity(texts.len());
+
+        for text in texts {
+            let resp = client
+                .post(format!("{}/api/embed", self.base_url))
+                .json(&serde_json::json!({
+                    "model": self.model,
+                    "input": text,
+                }))
+                .timeout(std::time::Duration::from_secs(30))
+                .send()
+                .await?;
+
+            let body: serde_json::Value = resp.json().await?;
+
+            if let Some(embeddings) = body["embeddings"].as_array() {
+                if let Some(first) = embeddings.first() {
+                    let emb: Vec<f32> = first
+                        .as_array()
+                        .unwrap_or(&vec![])
+                        .iter()
+                        .filter_map(|v| v.as_f64().map(|f| f as f32))
+                        .collect();
+                    all_embeddings.push(emb);
+                } else {
+                    anyhow::bail!("Empty embeddings in Ollama response");
+                }
+            } else {
+                anyhow::bail!("Unexpected Ollama embed response format");
+            }
+        }
+
+        Ok(all_embeddings)
+    }
+
+    fn dimensions(&self) -> usize {
+        self.dimensions
+    }
+
+    fn model_name(&self) -> &str {
+        &self.model
+    }
+}
+
 /// Write chunk embeddings to pgvector.
 pub async fn store_chunk_embeddings(
     pool: &PgPool,
@@ -149,6 +217,18 @@ mod tests {
         );
         assert_eq!(provider.dimensions(), 768);
         assert_eq!(provider.model_name(), "nomic-embed-text");
+    }
+
+    #[test]
+    fn test_ollama_provider_new() {
+        let provider = OllamaEmbeddingProvider::new(
+            "http://localhost:11434",
+            "nomic-embed-text",
+            768,
+        );
+        assert_eq!(provider.dimensions(), 768);
+        assert_eq!(provider.model_name(), "nomic-embed-text");
+        assert_eq!(provider.base_url, "http://localhost:11434");
     }
 
     #[test]
