@@ -109,6 +109,7 @@ services:
       - "443:443"
     volumes:
       - ./caddy/Caddyfile:/etc/caddy/Caddyfile
+      - ../apps/client/build/web:/srv/web:ro
       - caddy_data:/data
       - caddy_config:/config
     depends_on:

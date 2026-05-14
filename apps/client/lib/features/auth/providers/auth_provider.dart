@@ -6,7 +6,7 @@ import '../../../core/api/api_client.dart';
 final apiClientProvider = Provider<ApiClient>((ref) {
   return ApiClient(baseUrl: const String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://localhost:3000',
+    defaultValue: '/api',
   ));
 });
 

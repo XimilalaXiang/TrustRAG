@@ -77,7 +77,10 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('auth_token') ?? '';
       final api = ref.read(apiClientProvider);
-      final baseUrl = api.dio.options.baseUrl;
+      var baseUrl = api.dio.options.baseUrl;
+      if (baseUrl.startsWith('/')) {
+        baseUrl = Uri.base.origin + baseUrl;
+      }
 
       final request = http.Request(
         'POST',

@@ -110,9 +110,9 @@ CREATE INDEX idx_chunks_embedding ON document_chunks
     USING hnsw (embedding vector_cosine_ops)
     WITH (m = 16, ef_construction = 64);
 
--- pg_bigm 中文全文检索索引
-CREATE INDEX idx_chunks_content_bigm ON document_chunks
-    USING gin (content gin_bigm_ops);
+-- pg_trgm 全文检索索引（MVP 阶段使用 pg_trgm，生产环境可替换为 pg_bigm）
+CREATE INDEX idx_chunks_content_trgm ON document_chunks
+    USING gin (content gin_trgm_ops);
 
 -- ============================================================
 -- 5. 模型配置

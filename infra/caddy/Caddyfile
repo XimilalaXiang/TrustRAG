@@ -1,5 +1,5 @@
 :80 {
-    handle /api/* {
+    handle_path /api/* {
         reverse_proxy backend:8080
     }
 
@@ -7,11 +7,9 @@
         reverse_proxy backend:8080
     }
 
-    handle /swagger-ui/* {
-        reverse_proxy backend:8080
-    }
-
     handle {
-        respond "TrustRAG - API server running on /api/*" 200
+        root * /srv/web
+        try_files {path} /index.html
+        file_server
     }
 }
