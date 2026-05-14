@@ -253,7 +253,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                   subtitle: Text(
                       ref.watch(authProvider).user?['email'] ?? '未知'),
                   trailing: const Icon(Icons.chevron_right),
-                  onTap: () {},
+                  onTap: () => _showAccountDialog(),
                 ),
               ),
               const SizedBox(height: 8),
@@ -263,7 +263,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                   title: const Text('关于'),
                   subtitle: const Text('TrustRAG v1.0.0'),
                   trailing: const Icon(Icons.chevron_right),
-                  onTap: () {},
+                  onTap: () => _showAboutDialog(),
                 ),
               ),
             ],
@@ -303,6 +303,97 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
           ),
           const Spacer(),
           if (actions != null) ...actions,
+        ],
+      ),
+    );
+  }
+
+  void _showAccountDialog() {
+    final user = ref.read(authProvider).user;
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('账户信息'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            CircleAvatar(
+              radius: 36,
+              child: Text(
+                (user?['display_name'] ?? 'U')[0].toUpperCase(),
+                style: const TextStyle(fontSize: 28),
+              ),
+            ),
+            const SizedBox(height: 16),
+            _infoRow('用户名', user?['display_name'] ?? '未知'),
+            const SizedBox(height: 8),
+            _infoRow('邮箱', user?['email'] ?? '未知'),
+            const SizedBox(height: 8),
+            _infoRow('角色', user?['role'] ?? 'user'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('关闭'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _infoRow(String label, String value) {
+    return Row(
+      children: [
+        Text('$label: ',
+            style: const TextStyle(
+                fontWeight: FontWeight.w600, color: Colors.grey)),
+        Expanded(child: Text(value)),
+      ],
+    );
+  }
+
+  void _showAboutDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.auto_stories_rounded,
+                color: Theme.of(context).colorScheme.primary),
+            const SizedBox(width: 8),
+            const Text('关于 TrustRAG'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('TrustRAG - 可信赖的 RAG 知识工作台',
+                style: TextStyle(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 12),
+            _infoRow('版本', 'v1.0.0'),
+            const SizedBox(height: 4),
+            _infoRow('后端', 'Rust (Axum)'),
+            const SizedBox(height: 4),
+            _infoRow('前端', 'Flutter Web'),
+            const SizedBox(height: 4),
+            _infoRow('数据库', 'PostgreSQL + pgvector'),
+            const SizedBox(height: 4),
+            _infoRow('存储', 'MinIO (S3-compatible)'),
+            const SizedBox(height: 12),
+            const Text(
+              '基于文档检索增强生成（RAG）技术，提供带引用溯源的可信赖 AI 问答。',
+              style: TextStyle(color: Colors.grey, fontSize: 13),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('关闭'),
+          ),
         ],
       ),
     );
