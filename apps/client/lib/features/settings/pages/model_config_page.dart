@@ -141,9 +141,44 @@ class _ModelConfigPageState extends ConsumerState<ModelConfigPage> {
     );
   }
 
+  String _endpointHint(String provider) {
+    switch (provider) {
+      case 'openai':
+        return 'https://api.openai.com/v1';
+      case 'anthropic':
+        return 'https://api.anthropic.com/v1';
+      case 'ollama':
+        return 'http://localhost:11434/v1';
+      default:
+        return 'https://your-api.com/v1';
+    }
+  }
+
+  String _modelHint(String provider, String modelType) {
+    if (modelType == 'embedding') {
+      switch (provider) {
+        case 'openai':
+          return '如 text-embedding-3-small';
+        case 'ollama':
+          return '如 nomic-embed-text';
+        default:
+          return '如 bge-large-zh';
+      }
+    }
+    switch (provider) {
+      case 'openai':
+        return '如 gpt-4o, gpt-4o-mini';
+      case 'anthropic':
+        return '如 claude-3-5-sonnet-20241022';
+      case 'ollama':
+        return '如 qwen2.5:7b, llama3.1:8b';
+      default:
+        return '如 your-model-name';
+    }
+  }
+
   void _showConfigDialog({ModelConfig? config}) {
-    final providerCtl =
-        TextEditingController(text: config?.provider ?? 'openai');
+    String selectedProvider = config?.provider ?? 'openai';
     final modelCtl = TextEditingController(text: config?.modelName ?? '');
     final endpointCtl =
         TextEditingController(text: config?.apiEndpoint ?? '');
@@ -161,31 +196,46 @@ class _ModelConfigPageState extends ConsumerState<ModelConfigPage> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 DropdownButtonFormField<String>(
-                  initialValue: providerCtl.text,
+                  initialValue: selectedProvider,
                   decoration: const InputDecoration(labelText: 'Provider'),
                   items: ['openai', 'anthropic', 'ollama', 'custom']
                       .map((p) => DropdownMenuItem(value: p, child: Text(p)))
                       .toList(),
-                  onChanged: (v) => providerCtl.text = v ?? 'openai',
+                  onChanged: (v) {
+                    setDialogState(() => selectedProvider = v ?? 'openai');
+                    if (endpointCtl.text.isEmpty) {
+                      endpointCtl.text = _endpointHint(selectedProvider);
+                    }
+                  },
                 ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: modelCtl,
-                  decoration:
-                      const InputDecoration(labelText: '模型名称 (如 gpt-4o)'),
+                  decoration: InputDecoration(
+                    labelText: '模型名称',
+                    hintText: _modelHint(selectedProvider, modelType),
+                  ),
                 ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: endpointCtl,
-                  decoration: const InputDecoration(
-                      labelText: 'API Endpoint'),
+                  decoration: InputDecoration(
+                    labelText: 'API Endpoint',
+                    hintText: _endpointHint(selectedProvider),
+                    helperText: '填写到 /v1 即可，无需加 /chat/completions',
+                    helperMaxLines: 2,
+                  ),
                 ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: apiKeyCtl,
                   decoration: InputDecoration(
                     labelText: 'API Key',
-                    hintText: config != null ? '留空则不修改' : '',
+                    hintText: config != null
+                        ? '留空则不修改'
+                        : selectedProvider == 'ollama'
+                            ? '本地 Ollama 无需填写'
+                            : 'sk-...',
                   ),
                   obscureText: true,
                 ),
@@ -218,7 +268,7 @@ class _ModelConfigPageState extends ConsumerState<ModelConfigPage> {
             FilledButton(
               onPressed: () async {
                 final data = <String, dynamic>{
-                  'provider': providerCtl.text,
+                  'provider': selectedProvider,
                   'model_name': modelCtl.text,
                   'api_endpoint': endpointCtl.text,
                   'model_type': modelType,
