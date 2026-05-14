@@ -205,21 +205,24 @@
 - 涉及文件：`backend/src/api/chat.rs`
 - 验收：前端通过 SSE 接收流式回答 + 引用
 
-#### 🔲 3.5 引用解析 + 验证
-- [ ] Citation Extraction（正则匹配 [1][2] 标记）
-- [ ] Citation Verification（检查引用编号有效性 + 文本匹配）
-- [ ] citations 表写入
+#### ✅ 3.5 引用解析 + 验证
+- [x] Citation Extraction（正则匹配 [1][2] 标记 + 去重 + 位置追踪）
+- [x] Citation Verification（引用编号 vs Source 索引匹配 → Valid / IndexOutOfRange）
+- [x] citations 表写入（verified=true 的引用持久化）
+- [x] GET /messages/:id/citations API
+- [x] 8 个单元测试通过
 - 参考：`docs/rag-pipeline.md` → 阶段 8-9
-- 涉及文件：`backend/src/services/citation.rs`（新建）
+- 涉及文件：`backend/src/services/citation.rs`, `backend/src/api/citations.rs`
 - 验收：回答中的引用可以追溯到具体分块 + 页码
 
-#### 🔲 3.6 对话历史 API
-- [ ] 对话列表（分页）
-- [ ] 对话详情 + 消息列表
-- [ ] 创建/删除对话
-- [ ] 消息的引用列表
+#### ✅ 3.6 对话历史 API
+- [x] 对话列表（按 updated_at 降序）
+- [x] 对话详情 + 消息列表（按 created_at 升序）
+- [x] 创建/删除对话
+- [x] 消息的引用列表（GET /messages/:id/citations）
+- 已在 Sprint 3.4 和 3.5 中完成实现
 - 参考：`docs/api-design.md` → §5 对话
-- 涉及文件：`backend/src/api/chat.rs`
+- 涉及文件：`backend/src/api/chat.rs`, `backend/src/api/citations.rs`
 - 验收：完整的对话 CRUD + 消息引用查询
 
 ---
