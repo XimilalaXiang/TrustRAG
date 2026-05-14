@@ -56,6 +56,11 @@ async fn main() -> anyhow::Result<()> {
 
     let upload_limit = config.max_upload_size_mb * 1024 * 1024;
 
+    let embedding_cache = moka::future::Cache::builder()
+        .max_capacity(1000)
+        .time_to_live(std::time::Duration::from_secs(600))
+        .build();
+
     let state = AppState {
         pool: pool.clone(),
         jwt_secret: config.jwt_secret.clone(),
@@ -63,6 +68,7 @@ async fn main() -> anyhow::Result<()> {
         max_upload_size: config.max_upload_size_mb,
         embedding_provider: std::sync::Arc::new(tokio::sync::RwLock::new(None)),
         doc_processor_url: config.doc_processor_url.clone(),
+        embedding_cache,
     };
 
     api::embedding_configs::init_embedding_provider(&state).await;

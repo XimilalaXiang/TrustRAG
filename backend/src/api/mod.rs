@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use moka::future::Cache;
 use sqlx::PgPool;
 use tokio::sync::RwLock;
 
@@ -24,4 +25,5 @@ pub struct AppState {
     pub max_upload_size: u64,
     pub embedding_provider: Arc<RwLock<Option<Arc<dyn EmbeddingProvider>>>>,
     pub doc_processor_url: String,
+    pub embedding_cache: Cache<String, Vec<f32>>,
 }
