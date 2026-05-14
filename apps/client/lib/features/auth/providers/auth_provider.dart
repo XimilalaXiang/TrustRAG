@@ -94,11 +94,18 @@ class AuthNotifier extends StateNotifier<AuthState> {
   Future<bool> register(String name, String email, String password) async {
     try {
       state = state.copyWith(error: null);
-      await _api.dio.post('/auth/register', data: {
+      final resp = await _api.dio.post('/auth/register', data: {
         'display_name': name,
         'email': email,
         'password': password,
       });
+      final token = (resp.data['token'] ?? resp.data['access_token']) as String;
+      await ApiClient.saveToken(token);
+      state = AuthState(
+        status: AuthStatus.authenticated,
+        token: token,
+        user: resp.data['user'],
+      );
       return true;
     } on DioException catch (e) {
       final msg = e.response?.data?['error'] ?? 'Registration failed';

@@ -572,7 +572,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(
-                  '${citation.index + 1}',
+                  '${citation.index}',
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.bold,
@@ -862,7 +862,7 @@ class _CitationDetailDialogState
               borderRadius: BorderRadius.circular(6),
             ),
             child: Text(
-              '${c.index + 1}',
+              '${c.index}',
               style: TextStyle(
                 fontWeight: FontWeight.bold,
                 color: theme.colorScheme.onPrimary,
@@ -872,7 +872,7 @@ class _CitationDetailDialogState
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              c.heading ?? '引用 ${c.index + 1}',
+              c.heading ?? '引用 ${c.index}',
               style: const TextStyle(fontSize: 16),
             ),
           ),
