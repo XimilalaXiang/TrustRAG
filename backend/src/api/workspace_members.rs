@@ -67,7 +67,7 @@ async fn check_owner_or_editor(
     }
 
     let is_creator = sqlx::query_scalar::<_, bool>(
-        "SELECT EXISTS(SELECT 1 FROM workspaces WHERE id = $1 AND user_id = $2)",
+        "SELECT EXISTS(SELECT 1 FROM workspaces WHERE id = $1 AND owner_id = $2)",
     )
     .bind(ws_id)
     .bind(user_id)
@@ -83,11 +83,39 @@ async fn check_owner_or_editor(
     ))
 }
 
+async fn check_workspace_access(
+    pool: &sqlx::PgPool,
+    ws_id: Uuid,
+    user_id: Uuid,
+) -> Result<(), AppError> {
+    let has_access = sqlx::query_scalar::<_, bool>(
+        r#"
+        SELECT EXISTS(
+            SELECT 1 FROM workspaces
+            WHERE id = $1
+              AND (owner_id = $2
+                   OR id IN (SELECT workspace_id FROM workspace_members WHERE user_id = $2)
+                   OR visibility = 'public')
+        )
+        "#,
+    )
+    .bind(ws_id)
+    .bind(user_id)
+    .fetch_one(pool)
+    .await?;
+
+    if !has_access {
+        return Err(AppError::NotFound("Workspace not found".into()));
+    }
+    Ok(())
+}
+
 async fn list_members(
     State(state): State<AppState>,
-    _auth: AuthUser,
+    auth: AuthUser,
     Path(ws_id): Path<Uuid>,
 ) -> Result<Json<Vec<MemberResponse>>, AppError> {
+    check_workspace_access(&state.pool, ws_id, auth.id).await?;
     let members = sqlx::query_as::<_, MemberResponse>(
         "SELECT wm.id, wm.workspace_id, wm.user_id, u.username, wm.role, wm.created_at
          FROM workspace_members wm
