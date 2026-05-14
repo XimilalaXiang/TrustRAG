@@ -17,6 +17,8 @@ class DocumentsPage extends ConsumerStatefulWidget {
 
 class _DocumentsPageState extends ConsumerState<DocumentsPage> {
   Timer? _refreshTimer;
+  final Set<String> _selectedIds = {};
+  bool _selectionMode = false;
 
   @override
   void initState() {
@@ -57,21 +59,65 @@ class _DocumentsPageState extends ConsumerState<DocumentsPage> {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['pdf', 'docx', 'txt'],
+      allowMultiple: true,
       withData: true,
     );
 
     if (result != null && result.files.isNotEmpty) {
-      final file = result.files.first;
-      if (file.bytes != null) {
-        final success = await ref
-            .read(documentProvider.notifier)
-            .uploadDocument(ws.id, file.bytes!, file.name);
-        if (mounted && success) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('${file.name} 上传成功')),
-          );
+      int successCount = 0;
+      for (final file in result.files) {
+        if (file.bytes != null) {
+          final ok = await ref
+              .read(documentProvider.notifier)
+              .uploadDocument(ws.id, file.bytes!, file.name);
+          if (ok) successCount++;
         }
       }
+      if (mounted && successCount > 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('成功上传 $successCount 个文件')),
+        );
+      }
+    }
+  }
+
+  Future<void> _batchDelete() async {
+    if (_selectedIds.isEmpty) return;
+    final ws = ref.read(selectedWorkspaceProvider);
+    if (ws == null) return;
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('批量删除'),
+        content: Text('确认删除 ${_selectedIds.length} 个文档？此操作不可恢复。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    for (final id in _selectedIds.toList()) {
+      await ref.read(documentProvider.notifier).deleteDocument(ws.id, id);
+    }
+    setState(() {
+      _selectedIds.clear();
+      _selectionMode = false;
+    });
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('批量删除完成')),
+      );
     }
   }
 
@@ -112,11 +158,36 @@ class _DocumentsPageState extends ConsumerState<DocumentsPage> {
                 ],
               ),
               const Spacer(),
-              FilledButton.icon(
-                onPressed: _uploadFile,
-                icon: const Icon(Icons.upload_file, size: 18),
-                label: const Text('上传文档'),
-              ),
+              if (_selectionMode) ...[
+                Text('已选 ${_selectedIds.length} 项',
+                    style: TextStyle(color: Colors.grey.shade600)),
+                const SizedBox(width: 12),
+                OutlinedButton.icon(
+                  onPressed: _batchDelete,
+                  icon: const Icon(Icons.delete_outline, size: 18, color: Colors.red),
+                  label: const Text('批量删除', style: TextStyle(color: Colors.red)),
+                ),
+                const SizedBox(width: 8),
+                TextButton(
+                  onPressed: () => setState(() {
+                    _selectionMode = false;
+                    _selectedIds.clear();
+                  }),
+                  child: const Text('取消'),
+                ),
+              ] else ...[
+                OutlinedButton.icon(
+                  onPressed: () => setState(() => _selectionMode = true),
+                  icon: const Icon(Icons.checklist, size: 18),
+                  label: const Text('选择'),
+                ),
+                const SizedBox(width: 8),
+                FilledButton.icon(
+                  onPressed: _uploadFile,
+                  icon: const Icon(Icons.upload_file, size: 18),
+                  label: const Text('上传文档'),
+                ),
+              ],
             ],
           ),
         ),
@@ -152,19 +223,48 @@ class _DocumentsPageState extends ConsumerState<DocumentsPage> {
                 itemCount: list.length,
                 itemBuilder: (context, index) {
                   final doc = list[index];
+                  final isSelected = _selectedIds.contains(doc.id);
                   return Card(
                     child: ListTile(
-                      onTap: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => DocumentViewerPage(
-                              document: doc,
-                              workspaceId: ws.id,
-                            ),
-                          ),
-                        );
+                      onTap: _selectionMode
+                          ? () => setState(() {
+                                if (isSelected) {
+                                  _selectedIds.remove(doc.id);
+                                } else {
+                                  _selectedIds.add(doc.id);
+                                }
+                              })
+                          : () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => DocumentViewerPage(
+                                    document: doc,
+                                    workspaceId: ws.id,
+                                  ),
+                                ),
+                              );
+                            },
+                      onLongPress: () {
+                        if (!_selectionMode) {
+                          setState(() {
+                            _selectionMode = true;
+                            _selectedIds.add(doc.id);
+                          });
+                        }
                       },
-                      leading: _fileIcon(doc.fileType),
+                      selected: isSelected,
+                      leading: _selectionMode
+                          ? Checkbox(
+                              value: isSelected,
+                              onChanged: (v) => setState(() {
+                                if (v == true) {
+                                  _selectedIds.add(doc.id);
+                                } else {
+                                  _selectedIds.remove(doc.id);
+                                }
+                              }),
+                            )
+                          : _fileIcon(doc.fileType),
                       title: Text(doc.originalFilename,
                           style: const TextStyle(fontWeight: FontWeight.w500)),
                       subtitle: Column(
