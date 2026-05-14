@@ -3,11 +3,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiClient {
   late final Dio dio;
+  final String baseUrl;
   static const _tokenKey = 'auth_token';
 
-  ApiClient({String? baseUrl}) {
+  ApiClient({String? baseUrl}) : baseUrl = baseUrl ?? 'http://localhost:3000' {
     dio = Dio(BaseOptions(
-      baseUrl: baseUrl ?? 'http://localhost:3000',
+      baseUrl: this.baseUrl,
       connectTimeout: const Duration(seconds: 10),
       receiveTimeout: const Duration(seconds: 30),
       headers: {'Content-Type': 'application/json'},

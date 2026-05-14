@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../auth/providers/auth_provider.dart';
 import '../../dashboard/providers/workspace_provider.dart';
+import '../../reader/pages/pdf_viewer_page.dart';
 import '../providers/chat_provider.dart';
 
 class ChatPage extends ConsumerStatefulWidget {
@@ -570,6 +571,30 @@ class _ChatPageState extends ConsumerState<ChatPage> {
           ),
         ),
         actions: [
+          if (citation.page != null)
+            TextButton.icon(
+              onPressed: () {
+                Navigator.pop(ctx);
+                final ws = ref.read(selectedWorkspaceProvider);
+                if (ws != null) {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => PdfViewerPage(
+                        workspaceId: ws.id,
+                        documentId: citation.documentId,
+                        title: citation.heading ?? '引用来源',
+                        initialPage: citation.page,
+                        highlightText: citation.text.length > 50
+                            ? citation.text.substring(0, 50)
+                            : citation.text,
+                      ),
+                    ),
+                  );
+                }
+              },
+              icon: const Icon(Icons.open_in_new, size: 16),
+              label: const Text('查看原文'),
+            ),
           TextButton(
             onPressed: () => Navigator.pop(ctx),
             child: const Text('关闭'),
