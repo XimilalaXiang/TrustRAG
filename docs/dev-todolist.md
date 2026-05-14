@@ -229,13 +229,14 @@
 
 ### Sprint 4: Flutter Web 前端（第 4-6 周）
 
-#### 🔲 4.0 Flutter 项目初始化
-- [ ] flutter create（Web 优先）
-- [ ] 依赖安装（riverpod, go_router, dio, etc.）
-- [ ] 项目结构搭建（features/ + core/ + shared/）
-- [ ] 主题配置（Perplexity 风格 Light/Dark）
-- 参考：`docs/tech-stack.md` → 客户端层
-- 参考：`.notes/08-ui-design-style.md`（完整参考）
+#### ✅ 4.0 Flutter 项目初始化
+- [x] flutter create（Web 优先）
+- [x] 依赖安装（riverpod, go_router, dio, shared_preferences, google_fonts 等）
+- [x] 项目结构搭建（features/ + core/ + shared/）
+- [x] 主题配置（Perplexity 风格 Light/Dark，Material 3 + Inter 字体）
+- [x] 登录/注册页面 + Dashboard 骨架
+- [x] flutter analyze: 0 issues
+- [x] flutter build web: 成功
 - 涉及文件：`apps/client/`
 - 验收：Flutter Web 项目可运行，有基础主题
 

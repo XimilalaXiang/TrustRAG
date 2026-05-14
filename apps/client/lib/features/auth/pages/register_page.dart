@@ -1,14 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-class RegisterPage extends StatefulWidget {
+import '../providers/auth_provider.dart';
+
+class RegisterPage extends ConsumerStatefulWidget {
   const RegisterPage({super.key});
 
   @override
-  State<RegisterPage> createState() => _RegisterPageState();
+  ConsumerState<RegisterPage> createState() => _RegisterPageState();
 }
 
-class _RegisterPageState extends State<RegisterPage> {
+class _RegisterPageState extends ConsumerState<RegisterPage> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
@@ -16,7 +19,6 @@ class _RegisterPageState extends State<RegisterPage> {
   final _confirmController = TextEditingController();
   bool _isLoading = false;
   bool _obscurePassword = true;
-  String? _errorMessage;
 
   @override
   void dispose() {
@@ -30,23 +32,29 @@ class _RegisterPageState extends State<RegisterPage> {
   Future<void> _handleRegister() async {
     if (!_formKey.currentState!.validate()) return;
 
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
+    setState(() => _isLoading = true);
 
-    // TODO: Implement actual register API call
-    await Future.delayed(const Duration(seconds: 1));
+    final success = await ref.read(authProvider.notifier).register(
+          _nameController.text.trim(),
+          _emailController.text.trim(),
+          _passwordController.text,
+        );
 
     if (mounted) {
       setState(() => _isLoading = false);
-      context.go('/login');
+      if (success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('注册成功，请登录')),
+        );
+        context.go('/login');
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final authState = ref.watch(authProvider);
 
     return Scaffold(
       body: Center(
@@ -82,10 +90,8 @@ class _RegisterPageState extends State<RegisterPage> {
                           labelText: '用户名',
                           prefixIcon: Icon(Icons.person_outlined),
                         ),
-                        validator: (v) {
-                          if (v == null || v.isEmpty) return '请输入用户名';
-                          return null;
-                        },
+                        validator: (v) =>
+                            (v == null || v.isEmpty) ? '请输入用户名' : null,
                       ),
                       const SizedBox(height: 16),
                       TextFormField(
@@ -132,20 +138,25 @@ class _RegisterPageState extends State<RegisterPage> {
                           prefixIcon: Icon(Icons.lock_outlined),
                         ),
                         obscureText: _obscurePassword,
-                        validator: (v) {
-                          if (v != _passwordController.text) return '两次密码不一致';
-                          return null;
-                        },
+                        validator: (v) =>
+                            v != _passwordController.text ? '两次密码不一致' : null,
                       ),
                     ],
                   ),
                 ),
-                if (_errorMessage != null) ...[
+                if (authState.error != null) ...[
                   const SizedBox(height: 12),
-                  Text(
-                    _errorMessage!,
-                    style: TextStyle(color: theme.colorScheme.error),
-                    textAlign: TextAlign.center,
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.error.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      authState.error!,
+                      style: TextStyle(color: theme.colorScheme.error),
+                      textAlign: TextAlign.center,
+                    ),
                   ),
                 ],
                 const SizedBox(height: 24),

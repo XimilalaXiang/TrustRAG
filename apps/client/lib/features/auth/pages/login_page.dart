@@ -1,20 +1,22 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-class LoginPage extends StatefulWidget {
+import '../providers/auth_provider.dart';
+
+class LoginPage extends ConsumerStatefulWidget {
   const LoginPage({super.key});
 
   @override
-  State<LoginPage> createState() => _LoginPageState();
+  ConsumerState<LoginPage> createState() => _LoginPageState();
 }
 
-class _LoginPageState extends State<LoginPage> {
+class _LoginPageState extends ConsumerState<LoginPage> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isLoading = false;
   bool _obscurePassword = true;
-  String? _errorMessage;
 
   @override
   void dispose() {
@@ -26,23 +28,25 @@ class _LoginPageState extends State<LoginPage> {
   Future<void> _handleLogin() async {
     if (!_formKey.currentState!.validate()) return;
 
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
+    setState(() => _isLoading = true);
 
-    // TODO: Implement actual login API call
-    await Future.delayed(const Duration(seconds: 1));
+    final success = await ref.read(authProvider.notifier).login(
+          _emailController.text.trim(),
+          _passwordController.text,
+        );
 
     if (mounted) {
       setState(() => _isLoading = false);
-      context.go('/dashboard');
+      if (success) {
+        context.go('/dashboard');
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final authState = ref.watch(authProvider);
 
     return Scaffold(
       body: Center(
@@ -115,16 +119,24 @@ class _LoginPageState extends State<LoginPage> {
                           if (v.length < 6) return '密码至少 6 个字符';
                           return null;
                         },
+                        onFieldSubmitted: (_) => _handleLogin(),
                       ),
                     ],
                   ),
                 ),
-                if (_errorMessage != null) ...[
+                if (authState.error != null) ...[
                   const SizedBox(height: 12),
-                  Text(
-                    _errorMessage!,
-                    style: TextStyle(color: theme.colorScheme.error),
-                    textAlign: TextAlign.center,
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.error.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      authState.error!,
+                      style: TextStyle(color: theme.colorScheme.error),
+                      textAlign: TextAlign.center,
+                    ),
                   ),
                 ],
                 const SizedBox(height: 24),
