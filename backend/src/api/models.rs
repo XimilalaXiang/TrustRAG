@@ -458,28 +458,57 @@ async fn test_provider_connection(
     model_name: &str,
 ) -> anyhow::Result<String> {
     let client = reqwest::Client::new();
-    let url = match provider {
-        "ollama" => format!("{}/models", api_base_url.trim_end_matches('/')),
-        _ => format!("{}/models", api_base_url.trim_end_matches('/')),
-    };
+    let base = api_base_url.trim_end_matches('/');
 
-    let mut req = client.get(&url);
+    let models_url = format!("{}/models", base);
+    let mut req = client.get(&models_url);
     if let Some(key) = api_key {
         req = req.bearer_auth(key);
     }
 
-    let resp = req.timeout(std::time::Duration::from_secs(10)).send().await?;
+    let resp = req
+        .timeout(std::time::Duration::from_secs(10))
+        .send()
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to connect to {}: {}", base, e))?;
 
     if !resp.status().is_success() {
+        let status = resp.status();
+        let body = resp.text().await.unwrap_or_default();
+        anyhow::bail!("API returned status {}: {}", status, body);
+    }
+
+    let chat_url = format!("{}/chat/completions", base);
+    let chat_body = serde_json::json!({
+        "model": model_name,
+        "messages": [{"role": "user", "content": "Hi"}],
+        "max_tokens": 5,
+    });
+
+    let mut chat_req = client.post(&chat_url).json(&chat_body);
+    if let Some(key) = api_key {
+        chat_req = chat_req.bearer_auth(key);
+    }
+
+    let chat_resp = chat_req
+        .timeout(std::time::Duration::from_secs(30))
+        .send()
+        .await
+        .map_err(|e| anyhow::anyhow!("Chat request failed: {}", e))?;
+
+    if !chat_resp.status().is_success() {
+        let status = chat_resp.status();
+        let body = chat_resp.text().await.unwrap_or_default();
         anyhow::bail!(
-            "API returned status {}: {}",
-            resp.status(),
-            resp.text().await.unwrap_or_default()
+            "Model '{}' chat test failed (status {}): {}",
+            model_name,
+            status,
+            body
         );
     }
 
     Ok(format!(
-        "Connected to {} ({}) successfully",
+        "Connected to {} and model '{}' responded successfully",
         provider, model_name
     ))
 }

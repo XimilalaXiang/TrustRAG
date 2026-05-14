@@ -104,15 +104,25 @@ class _ModelConfigPageState extends ConsumerState<ModelConfigPage> {
                         icon: const Icon(Icons.play_circle_outline),
                         tooltip: '测试连接',
                         onPressed: () async {
-                          final ok = await ref
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('正在测试连接...'),
+                              duration: Duration(seconds: 30),
+                            ),
+                          );
+                          final result = await ref
                               .read(modelConfigProvider.notifier)
-                              .testConnection(cfg.id);
+                              .testConnectionDetailed(cfg.id);
                           if (context.mounted) {
+                            ScaffoldMessenger.of(context)
+                                .hideCurrentSnackBar();
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
-                                content:
-                                    Text(ok ? '连接成功' : '连接失败'),
-                                backgroundColor: ok ? Colors.green : Colors.red,
+                                content: Text(result['message'] ?? '未知结果'),
+                                backgroundColor: result['success'] == true
+                                    ? Colors.green
+                                    : Colors.red,
+                                duration: const Duration(seconds: 4),
                               ),
                             );
                           }

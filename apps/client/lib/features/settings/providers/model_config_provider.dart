@@ -98,6 +98,16 @@ class ModelConfigNotifier
       return false;
     }
   }
+
+  Future<Map<String, dynamic>> testConnectionDetailed(String id) async {
+    try {
+      final api = ref.read(apiClientProvider);
+      final resp = await api.dio.post('/model-configs/$id/test');
+      return Map<String, dynamic>.from(resp.data);
+    } catch (e) {
+      return {'success': false, 'message': '请求失败: $e'};
+    }
+  }
 }
 
 final modelConfigProvider = StateNotifierProvider<ModelConfigNotifier,
