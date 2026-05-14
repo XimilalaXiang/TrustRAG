@@ -7,6 +7,7 @@ mod error;
 mod auth;
 mod api;
 mod db;
+mod metrics;
 mod services;
 mod traits;
 
@@ -102,8 +103,32 @@ async fn main() -> anyhow::Result<()> {
             },
         );
 
+    let shared_metrics = metrics::create_metrics();
+    let metrics_for_layer = shared_metrics.clone();
+
+    let metrics_middleware = tower::ServiceBuilder::new().layer(
+        axum::middleware::from_fn(move |req: axum::extract::Request, next: axum::middleware::Next| {
+            let m = metrics_for_layer.clone();
+            async move {
+                let start = std::time::Instant::now();
+                let response = next.run(req).await;
+                let latency = start.elapsed().as_millis() as u64;
+                let is_error = response.status().is_server_error();
+                m.record_request(latency, is_error);
+                response
+            }
+        }),
+    );
+
     let app = Router::new()
         .route("/health", get(|| async { "ok" }))
+        .route("/metrics", get({
+            let m = shared_metrics.clone();
+            move || {
+                let snap = m.snapshot();
+                async move { axum::Json(snap) }
+            }
+        }))
         .merge(api::users::router())
         .merge(api::workspaces::router())
         .merge(api::documents::router())
@@ -117,6 +142,7 @@ async fn main() -> anyhow::Result<()> {
         .layer(axum::Extension(JwtSecret(config.jwt_secret.clone())))
         .layer(DefaultBodyLimit::max(upload_limit as usize))
         .layer(CorsLayer::permissive())
+        .layer(metrics_middleware)
         .layer(trace_layer);
 
     let listener = tokio::net::TcpListener::bind(&config.listen_addr).await?;
