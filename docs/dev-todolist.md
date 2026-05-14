@@ -93,12 +93,13 @@
 - 涉及文件：`doc-processor/app/processors/docx.py`
 - 验收：上传 DOCX → 返回结构化 JSON
 
-#### 🔲 2.3 位置映射模块
-- [ ] 每段文字 → 原文页码 + 坐标 + 段落索引
-- [ ] heading_path 生成（如"第3章 > 3.2 认证"）
-- [ ] 存储映射关系
+#### ✅ 2.3 位置映射模块
+- [x] 每段文字 → 原文页码 + 坐标 + 段落索引 + 字符偏移
+- [x] heading_path 层级生成（如"Chapter 1 > 1.1 Background"）
+- [x] heading 堆栈管理（章节层级切换时正确弹出）
+- [x] 全文索引构建 + 文本搜索定位
+- [x] 8 个单元测试通过
 - 参考：`docs/rag-pipeline.md` → 文档摄入管线 §4
-- 参考：`.notes/06-reusable-sdks.md` → RAG-Knowledge-Base-Platform
 - 涉及文件：`doc-processor/app/processors/position_mapper.py`
 - 验收：给定 chunk → 返回精确的页码 + 位置
 
