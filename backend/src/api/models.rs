@@ -601,11 +601,12 @@ async fn hf_search_models(
 ) -> Result<Json<Vec<HfModelResult>>, AppError> {
     let client = reqwest::Client::new();
     let filter = params.filter.unwrap_or_else(|| "text-generation".to_string());
+    let limit = params.limit.min(50);
     let url = format!(
         "https://huggingface.co/api/models?search={}&filter={}&sort=downloads&direction=-1&limit={}",
         urlencoding::encode(&params.q),
         urlencoding::encode(&filter),
-        params.limit,
+        limit,
     );
 
     let resp = client

@@ -46,7 +46,9 @@ impl ProviderRegistry {
             .write()
             .await
             .insert(id.to_string(), provider);
-        self.provider_info.write().await.push(ProviderInfo {
+        let mut info = self.provider_info.write().await;
+        info.retain(|p| !(p.id == id && p.provider_type == ProviderType::Llm));
+        info.push(ProviderInfo {
             id: id.to_string(),
             provider_type: ProviderType::Llm,
             display_name: display_name.to_string(),
@@ -66,7 +68,9 @@ impl ProviderRegistry {
             .write()
             .await
             .insert(id.to_string(), provider);
-        self.provider_info.write().await.push(ProviderInfo {
+        let mut info = self.provider_info.write().await;
+        info.retain(|p| !(p.id == id && p.provider_type == ProviderType::Embedding));
+        info.push(ProviderInfo {
             id: id.to_string(),
             provider_type: ProviderType::Embedding,
             display_name: display_name.to_string(),

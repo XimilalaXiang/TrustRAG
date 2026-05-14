@@ -109,11 +109,15 @@ pub async fn get_review_stats_for_conversation(
 
     let reviewed = sqlx::query_as::<_, (String, i64)>(
         r#"
-        SELECT rr.status, COUNT(*) FROM review_records rr
-        JOIN citations c ON rr.citation_id = c.id
-        JOIN messages m ON c.message_id = m.id
-        WHERE m.conversation_id = $1
-        GROUP BY rr.status
+        SELECT latest.status, COUNT(*) FROM (
+            SELECT DISTINCT ON (rr.citation_id) rr.status
+            FROM review_records rr
+            JOIN citations c ON rr.citation_id = c.id
+            JOIN messages m ON c.message_id = m.id
+            WHERE m.conversation_id = $1
+            ORDER BY rr.citation_id, rr.created_at DESC
+        ) latest
+        GROUP BY latest.status
         "#,
     )
     .bind(conversation_id)

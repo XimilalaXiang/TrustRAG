@@ -250,11 +250,16 @@ async fn send_message(
     Path((ws_id, conv_id)): Path<(Uuid, Uuid)>,
     Json(req): Json<SendMessageRequest>,
 ) -> Result<impl IntoResponse, AppError> {
+    let content = req.content.trim().to_string();
+    if content.is_empty() {
+        return Err(AppError::BadRequest("Message content cannot be empty".into()));
+    }
+
     tracing::info!(
         user_id = %auth.id,
         workspace_id = %ws_id,
         conversation_id = %conv_id,
-        query_len = req.content.len(),
+        query_len = content.len(),
         "Chat message received"
     );
 
@@ -271,14 +276,19 @@ async fn send_message(
 
     let (conv_model_config_id, conv_doc_scope) = conv;
 
-    // Save user message
+    // Save user message and touch conversation updated_at
     sqlx::query(
         "INSERT INTO messages (conversation_id, role, content) VALUES ($1, 'user', $2)",
     )
     .bind(conv_id)
-    .bind(&req.content)
+    .bind(&content)
     .execute(&state.pool)
     .await?;
+
+    sqlx::query("UPDATE conversations SET updated_at = NOW() WHERE id = $1")
+        .bind(conv_id)
+        .execute(&state.pool)
+        .await?;
 
     // Determine model config
     let model_config_id = req.model_config_id.or(conv_model_config_id);
@@ -354,7 +364,7 @@ async fn send_message(
     if req.stream {
         // Return SSE stream
         let pool = state.pool.clone();
-        let query = req.content.clone();
+        let query = content.clone();
 
         let stream = build_sse_stream(
             pool,
@@ -380,7 +390,7 @@ async fn send_message(
             embedding_provider.as_ref(),
             &llm_provider,
             ws_id,
-            &req.content,
+            &content,
             &history,
             &doc_scope,
             &rag_config,

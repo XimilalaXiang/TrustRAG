@@ -70,7 +70,8 @@ async fn create(
     State(state): State<AppState>,
     Json(req): Json<CreateWorkspaceRequest>,
 ) -> Result<(axum::http::StatusCode, Json<WorkspaceResponse>), AppError> {
-    if req.name.is_empty() {
+    let name = req.name.trim().to_string();
+    if name.is_empty() {
         return Err(AppError::BadRequest("Name is required".into()));
     }
 
@@ -82,7 +83,7 @@ async fn create(
     let ws = sqlx::query_as::<_, WorkspaceResponse>(
         "INSERT INTO workspaces (name, description, owner_id, visibility) VALUES ($1, $2, $3, $4) RETURNING *",
     )
-    .bind(&req.name)
+    .bind(&name)
     .bind(&req.description)
     .bind(auth.id)
     .bind(&visibility)

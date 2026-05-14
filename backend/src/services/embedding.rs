@@ -86,6 +86,7 @@ impl EmbeddingProvider for OpenAIEmbeddingProvider {
 }
 
 pub struct OllamaEmbeddingProvider {
+    client: reqwest::Client,
     base_url: String,
     model: String,
     dimensions: usize,
@@ -94,6 +95,7 @@ pub struct OllamaEmbeddingProvider {
 impl OllamaEmbeddingProvider {
     pub fn new(base_url: &str, model: &str, dimensions: usize) -> Self {
         Self {
+            client: reqwest::Client::new(),
             base_url: base_url.trim_end_matches('/').to_string(),
             model: model.to_string(),
             dimensions,
@@ -108,11 +110,10 @@ impl EmbeddingProvider for OllamaEmbeddingProvider {
             return Ok(vec![]);
         }
 
-        let client = reqwest::Client::new();
         let mut all_embeddings = Vec::with_capacity(texts.len());
 
         for text in texts {
-            let resp = client
+            let resp = self.client
                 .post(format!("{}/api/embed", self.base_url))
                 .json(&serde_json::json!({
                     "model": self.model,
@@ -153,7 +154,7 @@ impl EmbeddingProvider for OllamaEmbeddingProvider {
     }
 }
 
-/// Write chunk embeddings to pgvector.
+/// Write chunk embeddings to pgvector in batches.
 pub async fn store_chunk_embeddings(
     pool: &PgPool,
     chunk_ids: &[Uuid],
@@ -167,23 +168,34 @@ pub async fn store_chunk_embeddings(
         );
     }
 
-    for (chunk_id, embedding) in chunk_ids.iter().zip(embeddings.iter()) {
-        let embedding_str = format!(
-            "[{}]",
-            embedding
-                .iter()
-                .map(|v| v.to_string())
-                .collect::<Vec<_>>()
-                .join(",")
+    if chunk_ids.is_empty() {
+        return Ok(());
+    }
+
+    let batch_size = 50;
+    for batch_start in (0..chunk_ids.len()).step_by(batch_size) {
+        let batch_end = (batch_start + batch_size).min(chunk_ids.len());
+        let batch_ids = &chunk_ids[batch_start..batch_end];
+        let batch_embeddings = &embeddings[batch_start..batch_end];
+
+        let mut query = String::from(
+            "UPDATE document_chunks SET embedding = v.emb::vector FROM (VALUES "
         );
 
-        sqlx::query(
-            "UPDATE document_chunks SET embedding = $1::vector WHERE id = $2",
-        )
-        .bind(&embedding_str)
-        .bind(chunk_id)
-        .execute(pool)
-        .await?;
+        for (i, (chunk_id, embedding)) in batch_ids.iter().zip(batch_embeddings.iter()).enumerate() {
+            if i > 0 {
+                query.push_str(", ");
+            }
+            let embedding_str = format!(
+                "[{}]",
+                embedding.iter().map(|v| v.to_string()).collect::<Vec<_>>().join(",")
+            );
+            query.push_str(&format!("('{}'::uuid, '{}')", chunk_id, embedding_str));
+        }
+
+        query.push_str(") AS v(id, emb) WHERE document_chunks.id = v.id");
+
+        sqlx::query(&query).execute(pool).await?;
     }
 
     Ok(())
