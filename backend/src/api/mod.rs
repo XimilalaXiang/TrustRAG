@@ -17,6 +17,7 @@ pub mod citations;
 pub mod reviews;
 pub mod embedding_configs;
 pub mod knowledge_graph;
+pub mod workspace_members;
 
 #[derive(Clone)]
 pub struct AppState {
