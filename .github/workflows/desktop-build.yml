@@ -1,4 +1,4 @@
-name: Desktop Build
+name: Multi-Platform Build
 
 on:
   push:
@@ -57,8 +57,54 @@ jobs:
           name: trustrag-windows-x64
           path: apps/client/trustrag-windows-x64.zip
 
+  build-android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Build Android APK
+        working-directory: apps/client
+        run: flutter build apk --release
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: trustrag-android
+          path: apps/client/build/app/outputs/flutter-apk/app-release.apk
+
+  build-web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Build Web
+        working-directory: apps/client
+        run: flutter build web --release
+
+      - name: Package Web build
+        run: |
+          cd apps/client/build/web
+          tar czf ../../trustrag-web.tar.gz .
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: trustrag-web
+          path: apps/client/trustrag-web.tar.gz
+
   release:
-    needs: [build-linux, build-windows]
+    needs: [build-linux, build-windows, build-android, build-web]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
@@ -73,4 +119,6 @@ jobs:
           files: |
             artifacts/trustrag-linux-x64/trustrag-linux-x64.tar.gz
             artifacts/trustrag-windows-x64/trustrag-windows-x64.zip
+            artifacts/trustrag-android/app-release.apk
+            artifacts/trustrag-web/trustrag-web.tar.gz
           generate_release_notes: true
