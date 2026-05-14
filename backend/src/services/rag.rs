@@ -231,6 +231,7 @@ pub struct RagConfig {
     pub temperature: f32,
     pub max_tokens: u32,
     pub language: String,
+    pub rerank: crate::services::reranker::ReRankConfig,
 }
 
 impl Default for RagConfig {
@@ -243,6 +244,7 @@ impl Default for RagConfig {
             temperature: 0.1,
             max_tokens: 4096,
             language: "zh".to_string(),
+            rerank: crate::services::reranker::ReRankConfig::default(),
         }
     }
 }
@@ -313,7 +315,15 @@ pub async fn run_rag_pipeline(
     )
     .await?;
 
-    let (context, sources) = assemble_context(&search_response.results, config.max_context_chars);
+    let results = crate::services::reranker::rerank(
+        search_response.results,
+        &analysis.rewritten_query,
+        &config.rerank,
+        llm_provider,
+    )
+    .await?;
+
+    let (context, sources) = assemble_context(&results, config.max_context_chars);
 
     if sources.is_empty() {
         return Ok(RagResponse {
@@ -396,7 +406,15 @@ pub async fn run_rag_pipeline_stream(
     )
     .await?;
 
-    let (context, sources) = assemble_context(&search_response.results, config.max_context_chars);
+    let results = crate::services::reranker::rerank(
+        search_response.results,
+        &analysis.rewritten_query,
+        &config.rerank,
+        llm_provider,
+    )
+    .await?;
+
+    let (context, sources) = assemble_context(&results, config.max_context_chars);
 
     if sources.is_empty() {
         let _ = tx.send(StreamEvent::Delta(
