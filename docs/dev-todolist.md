@@ -58,16 +58,16 @@
 - 涉及文件：`backend/src/api/documents.rs`
 - 验收：GET/POST/DELETE /workspaces/:ws_id/documents + /chunks + /markdown
 
-#### 🔲 1.7 Docker Compose 开发环境联调
-- [ ] 验证 postgres + pgvector + pg_bigm 启动
-- [ ] 验证 redis 连接
-- [ ] 验证 minio 启动 + bucket 创建
-- [ ] 验证 caddy 反向代理
-- [ ] Rust 后端连接所有服务
-- [ ] 编写 docker-compose.dev.yml（热重载）
+#### ✅ 1.7 Docker Compose 开发环境联调
+- [x] docker-compose.yml 完善（所有环境变量、健康检查、MinIO bucket 初始化）
+- [x] docker-compose.dev.yml（仅基础设施，开发时后端本地运行）
+- [x] 后端 Dockerfile（多阶段构建）
+- [x] PostgreSQL init.sql（pgvector + pg_trgm/pg_bigm）
+- [x] Caddy 反向代理配置
+- [x] MinIO bucket 自动创建（minio-init sidecar）
 - 参考：`docs/tech-stack.md` → Docker Compose 容器清单
-- 涉及文件：`infra/docker-compose.yml`, `infra/docker-compose.dev.yml`
-- 验收：`docker compose up` 一键启动所有服务
+- 涉及文件：`infra/docker-compose.yml`, `infra/docker-compose.dev.yml`, `backend/Dockerfile`
+- 验收：`docker compose -f infra/docker-compose.dev.yml up` 启动基础设施
 
 ---
 

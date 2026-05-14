@@ -1,41 +1,4 @@
 services:
-  backend:
-    build:
-      context: ../backend
-      dockerfile: Dockerfile
-    container_name: trustrag-backend
-    ports:
-      - "8080:8080"
-    environment:
-      RUST_LOG: trustrag_backend=debug,tower_http=debug
-      TRUSTRAG__LISTEN_ADDR: "0.0.0.0:8080"
-      TRUSTRAG__DATABASE_URL: postgres://trustrag:trustrag@postgres:5432/trustrag
-      TRUSTRAG__REDIS_URL: redis://redis:6379
-      TRUSTRAG__MINIO_ENDPOINT: http://minio:9000
-      TRUSTRAG__MINIO_ACCESS_KEY: minioadmin
-      TRUSTRAG__MINIO_SECRET_KEY: minioadmin
-      TRUSTRAG__MINIO_BUCKET: trustrag
-      TRUSTRAG__MINIO_REGION: us-east-1
-      TRUSTRAG__DOC_PROCESSOR_URL: http://doc-processor:8081
-      TRUSTRAG__JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
-      TRUSTRAG__MAX_UPLOAD_SIZE_MB: "100"
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      minio-init:
-        condition: service_completed_successfully
-    restart: unless-stopped
-
-  doc-processor:
-    build:
-      context: ../doc-processor
-    container_name: trustrag-doc-processor
-    ports:
-      - "8081:8081"
-    restart: unless-stopped
-
   postgres:
     image: pgvector/pgvector:pg16
     container_name: trustrag-postgres
@@ -53,7 +16,6 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
-    restart: unless-stopped
 
   redis:
     image: redis:7-alpine
@@ -67,7 +29,6 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
-    restart: unless-stopped
 
   minio:
     image: minio/minio:latest
@@ -86,7 +47,6 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
-    restart: unless-stopped
 
   minio-init:
     image: minio/mc:latest
@@ -101,23 +61,7 @@ services:
       echo 'Bucket trustrag created or already exists';
       "
 
-  caddy:
-    image: caddy:2-alpine
-    container_name: trustrag-caddy
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./caddy/Caddyfile:/etc/caddy/Caddyfile
-      - caddy_data:/data
-      - caddy_config:/config
-    depends_on:
-      - backend
-    restart: unless-stopped
-
 volumes:
   postgres_data:
   redis_data:
   minio_data:
-  caddy_data:
-  caddy_config:
