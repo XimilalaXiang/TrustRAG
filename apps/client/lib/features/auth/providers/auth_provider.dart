@@ -73,7 +73,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         'email': email,
         'password': password,
       });
-      final token = resp.data['token'] as String;
+      final token = (resp.data['token'] ?? resp.data['access_token']) as String;
       await ApiClient.saveToken(token);
       state = AuthState(
         status: AuthStatus.authenticated,
