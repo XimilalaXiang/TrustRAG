@@ -179,11 +179,14 @@
 - 涉及文件：`backend/src/services/llm.rs`, `backend/src/traits/llm_provider.rs`
 - 验收：调用 LLM → 获取流式/非流式回答
 
-#### 🔲 3.3 RAG 管线核心实现
-- [ ] Query Analysis（查询分析 → 是否需要检索）
-- [ ] Context Assembly（上下文组装 + Token 预算）
-- [ ] Prompt Engineering（反幻觉 prompt 模板）
-- [ ] 引用格式指令注入
+#### ✅ 3.3 RAG 管线核心实现
+- [x] Query Analysis（规则分类：Factual/Exploratory/Comparison/Summary/Chitchat）
+- [x] 对话历史上下文融合
+- [x] Context Assembly（字符预算管理 + heading/page 元数据）
+- [x] Prompt Engineering（反幻觉系统提示 ZH/EN + 引用格式强制）
+- [x] 完整 RAG 管线（非流式 + 流式两种模式）
+- [x] 闲聊绕过检索
+- [x] 12 个单元测试通过
 - 参考：`docs/rag-pipeline.md` → 阶段 1-2, 5-6（完整参考）
 - 涉及文件：`backend/src/services/rag.rs`
 - 验收：输入用户问题 → 检索 → 组装上下文 → 生成带引用的回答

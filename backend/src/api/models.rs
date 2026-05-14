@@ -99,7 +99,7 @@ fn encrypt_api_key(key: &str, secret: &str) -> String {
     hex::encode(encrypted)
 }
 
-fn decrypt_api_key(enc_hex: &str, secret: &str) -> Option<String> {
+pub fn decrypt_api_key(enc_hex: &str, secret: &str) -> Option<String> {
     let encrypted = hex::decode(enc_hex).ok()?;
     let secret_bytes = secret.as_bytes();
     let decrypted: Vec<u8> = encrypted
