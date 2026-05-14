@@ -38,6 +38,7 @@ async fn main() -> anyhow::Result<()> {
         storage,
         max_upload_size: config.max_upload_size_mb,
         embedding_provider: None, // configured via model settings at runtime
+        doc_processor_url: config.doc_processor_url.clone(),
     };
 
     let app = Router::new()

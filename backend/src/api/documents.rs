@@ -288,6 +288,23 @@ async fn upload_document(
     .fetch_one(&state.pool)
     .await?;
 
+    // Trigger async document processing
+    let pool = state.pool.clone();
+    let storage = state.storage.clone();
+    let doc_processor_url = state.doc_processor_url.clone();
+    let embedding_provider = state.embedding_provider.clone();
+    tokio::spawn(async move {
+        crate::services::document::process_document(
+            pool,
+            storage,
+            doc_processor_url,
+            embedding_provider,
+            doc_id,
+            ws_id,
+        )
+        .await;
+    });
+
     Ok((StatusCode::CREATED, Json(doc)))
 }
 
@@ -415,7 +432,21 @@ async fn reprocess_document(
     .await?
     .ok_or_else(|| AppError::NotFound("Document not found".into()))?;
 
-    // TODO: trigger async document processing task
+    let pool = state.pool.clone();
+    let storage = state.storage.clone();
+    let doc_processor_url = state.doc_processor_url.clone();
+    let embedding_provider = state.embedding_provider.clone();
+    tokio::spawn(async move {
+        crate::services::document::process_document(
+            pool,
+            storage,
+            doc_processor_url,
+            embedding_provider,
+            doc_id,
+            ws_id,
+        )
+        .await;
+    });
 
     Ok(Json(doc))
 }

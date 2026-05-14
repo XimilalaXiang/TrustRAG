@@ -21,4 +21,5 @@ pub struct AppState {
     pub storage: StorageService,
     pub max_upload_size: u64,
     pub embedding_provider: Option<Arc<dyn EmbeddingProvider>>,
+    pub doc_processor_url: String,
 }
