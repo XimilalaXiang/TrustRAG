@@ -117,15 +117,26 @@ class _ChatPageState extends ConsumerState<ChatPage> {
             currentEventType = trimmed.substring(7).trim();
             continue;
           }
-          if (!trimmed.startsWith('data: ')) continue;
+          if (!trimmed.startsWith('data:')) continue;
           final jsonStr = trimmed.substring(5).trim();
           if (jsonStr.isEmpty) continue;
+
+          final eventType = currentEventType;
+
+          if (eventType == 'error') {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('AI 错误: $jsonStr'),
+                  backgroundColor: Colors.red,
+                  duration: const Duration(seconds: 6),
+                ),
+              );
+            }
+            continue;
+          }
+
           try {
-            final eventType = currentEventType.isNotEmpty
-                ? currentEventType
-                : (jsonDecode(jsonStr) is Map
-                    ? (jsonDecode(jsonStr)['type'] ?? '')
-                    : '');
             final event = jsonDecode(jsonStr);
             if (eventType == 'message_start') {
               assistantId = event['message_id'] ?? '';
@@ -136,25 +147,21 @@ class _ChatPageState extends ConsumerState<ChatPage> {
               _scrollToBottom();
             } else if (eventType == 'message_end') {
               final fullContent = _streamingContent;
-              final aiMsg = ChatMessage(
-                id: assistantId,
-                role: 'assistant',
-                content: fullContent,
-                createdAt: DateTime.now(),
-              );
-              ref.read(messagesProvider.notifier).state = [
-                ...ref.read(messagesProvider),
-                aiMsg,
-              ];
+              if (fullContent.isNotEmpty) {
+                final aiMsg = ChatMessage(
+                  id: assistantId,
+                  role: 'assistant',
+                  content: fullContent,
+                  createdAt: DateTime.now(),
+                );
+                ref.read(messagesProvider.notifier).state = [
+                  ...ref.read(messagesProvider),
+                  aiMsg,
+                ];
+              }
               setState(() {
                 _streamingContent = '';
               });
-            } else if (eventType == 'error') {
-              final errMsg = event is String ? event : (event['message'] ?? event.toString());
-              if (mounted) {
-                ScaffoldMessenger.of(context)
-                    .showSnackBar(SnackBar(content: Text('AI 错误: $errMsg')));
-              }
             }
           } catch (_) {}
         }
