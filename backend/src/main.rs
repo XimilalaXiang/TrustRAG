@@ -49,6 +49,7 @@ async fn main() -> anyhow::Result<()> {
         .merge(api::search::router())
         .merge(api::models::router())
         .merge(api::chat::router())
+        .merge(api::citations::router())
         .with_state(state)
         .layer(axum::Extension(JwtSecret(config.jwt_secret.clone())))
         .layer(DefaultBodyLimit::max(upload_limit as usize))

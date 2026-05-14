@@ -191,13 +191,17 @@
 - 涉及文件：`backend/src/services/rag.rs`
 - 验收：输入用户问题 → 检索 → 组装上下文 → 生成带引用的回答
 
-#### 🔲 3.4 SSE 流式输出
-- [ ] Axum SSE handler
-- [ ] 文本增量推送 (text_delta)
-- [ ] 引用实时推送 (citation event)
-- [ ] 完成信号 (message_end + token 统计)
+#### ✅ 3.4 SSE 流式输出
+- [x] Axum SSE handler（async-stream + Event 构建）
+- [x] 文本增量推送 (text_delta event)
+- [x] 引用实时推送 (citation event)
+- [x] 完成信号 (message_end + token 统计 + latency)
+- [x] message_start 事件
+- [x] 对话 CRUD（创建/列表/详情/删除）
+- [x] 消息列表 + 自动持久化助手消息
+- [x] 非流式模式（stream=false → JSON 响应）
+- [x] 模型配置自动加载（请求级/对话级/用户默认）
 - 参考：`docs/api-design.md` → §5 流式响应格式
-- 参考：`.notes/07-component-sdk-map.md` → SSE 流式
 - 涉及文件：`backend/src/api/chat.rs`
 - 验收：前端通过 SSE 接收流式回答 + 引用
 

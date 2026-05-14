@@ -24,6 +24,7 @@ reqwest = { version = "0.12", features = ["json", "multipart"] }
 hex = "0.4"
 futures-util = "0.3"
 async-stream = "0.3"
+regex = "1"
 opendal = { version = "0.51", features = ["services-s3"] }
 tower = "0.5"
 tower-http = { version = "0.6", features = ["cors", "trace"] }

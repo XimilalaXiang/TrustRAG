@@ -1,4 +1,5 @@
 pub mod chunking;
+pub mod citation;
 pub mod document;
 pub mod rag;
 pub mod llm;
