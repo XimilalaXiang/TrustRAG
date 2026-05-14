@@ -21,6 +21,8 @@ pub fn router() -> Router<AppState> {
             put(update_config).delete(delete_config),
         )
         .route("/model-configs/{id}/test", post(test_connection))
+        .route("/ollama/discover", get(ollama_discover))
+        .route("/ollama/models", get(ollama_list_models))
 }
 
 // ── Request / Response types ──
@@ -449,6 +451,99 @@ mod tests {
         }
         assert!(!valid.contains(&"invalid_provider"));
     }
+}
+
+#[derive(Serialize)]
+struct OllamaDiscoverResponse {
+    available: bool,
+    url: String,
+    version: Option<String>,
+}
+
+async fn ollama_discover(
+    _auth: AuthUser,
+) -> Json<OllamaDiscoverResponse> {
+    let ollama_url =
+        std::env::var("OLLAMA_URL").unwrap_or_else(|_| "http://localhost:11434".to_string());
+
+    let client = reqwest::Client::new();
+    match client
+        .get(&ollama_url)
+        .timeout(std::time::Duration::from_secs(3))
+        .send()
+        .await
+    {
+        Ok(resp) if resp.status().is_success() => {
+            let body = resp.text().await.unwrap_or_default();
+            Json(OllamaDiscoverResponse {
+                available: true,
+                url: ollama_url,
+                version: if body.contains("Ollama") {
+                    Some(body.trim().to_string())
+                } else {
+                    None
+                },
+            })
+        }
+        _ => Json(OllamaDiscoverResponse {
+            available: false,
+            url: ollama_url,
+            version: None,
+        }),
+    }
+}
+
+#[derive(Serialize)]
+struct OllamaModel {
+    name: String,
+    size: Option<u64>,
+    modified_at: Option<String>,
+}
+
+#[derive(Serialize)]
+struct OllamaModelsResponse {
+    models: Vec<OllamaModel>,
+}
+
+async fn ollama_list_models(
+    _auth: AuthUser,
+) -> Result<Json<OllamaModelsResponse>, AppError> {
+    let ollama_url =
+        std::env::var("OLLAMA_URL").unwrap_or_else(|_| "http://localhost:11434".to_string());
+
+    let client = reqwest::Client::new();
+    let resp = client
+        .get(format!("{}/api/tags", ollama_url))
+        .timeout(std::time::Duration::from_secs(5))
+        .send()
+        .await
+        .map_err(|e| {
+            AppError::Internal(anyhow::anyhow!("Failed to connect to Ollama: {}", e))
+        })?;
+
+    if !resp.status().is_success() {
+        return Err(AppError::Internal(anyhow::anyhow!(
+            "Ollama returned status {}",
+            resp.status()
+        )));
+    }
+
+    let body: serde_json::Value = resp.json().await.map_err(|e| {
+        AppError::Internal(anyhow::anyhow!("Failed to parse Ollama response: {}", e))
+    })?;
+
+    let models = body["models"]
+        .as_array()
+        .unwrap_or(&vec![])
+        .iter()
+        .map(|m| OllamaModel {
+            name: m["name"].as_str().unwrap_or("").to_string(),
+            size: m["size"].as_u64(),
+            modified_at: m["modified_at"].as_str().map(|s| s.to_string()),
+        })
+        .collect();
+
+    Ok(Json(OllamaModelsResponse { models }))
 }
 
 async fn test_provider_connection(
