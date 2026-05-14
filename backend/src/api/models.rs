@@ -23,6 +23,7 @@ pub fn router() -> Router<AppState> {
         .route("/model-configs/{id}/test", post(test_connection))
         .route("/ollama/discover", get(ollama_discover))
         .route("/ollama/models", get(ollama_list_models))
+        .route("/huggingface/search", get(hf_search_models))
 }
 
 // ── Request / Response types ──
@@ -544,6 +545,79 @@ async fn ollama_list_models(
         .collect();
 
     Ok(Json(OllamaModelsResponse { models }))
+}
+
+#[derive(Deserialize)]
+struct HfSearchQuery {
+    q: String,
+    #[serde(default = "default_hf_limit")]
+    limit: usize,
+    #[serde(default)]
+    filter: Option<String>,
+}
+
+fn default_hf_limit() -> usize {
+    10
+}
+
+#[derive(Serialize)]
+struct HfModelResult {
+    id: String,
+    author: Option<String>,
+    downloads: Option<u64>,
+    likes: Option<u64>,
+    pipeline_tag: Option<String>,
+    tags: Vec<String>,
+    is_gguf: bool,
+}
+
+async fn hf_search_models(
+    _auth: AuthUser,
+    axum::extract::Query(params): axum::extract::Query<HfSearchQuery>,
+) -> Result<Json<Vec<HfModelResult>>, AppError> {
+    let client = reqwest::Client::new();
+    let filter = params.filter.unwrap_or_else(|| "text-generation".to_string());
+    let url = format!(
+        "https://huggingface.co/api/models?search={}&filter={}&sort=downloads&direction=-1&limit={}",
+        urlencoding::encode(&params.q),
+        urlencoding::encode(&filter),
+        params.limit,
+    );
+
+    let resp = client
+        .get(&url)
+        .timeout(std::time::Duration::from_secs(10))
+        .send()
+        .await
+        .map_err(|e| AppError::Internal(anyhow::anyhow!("HuggingFace API error: {}", e)))?;
+
+    let body: Vec<serde_json::Value> = resp.json().await.map_err(|e| {
+        AppError::Internal(anyhow::anyhow!("Failed to parse HuggingFace response: {}", e))
+    })?;
+
+    let models: Vec<HfModelResult> = body
+        .into_iter()
+        .map(|m| {
+            let tags: Vec<String> = m["tags"]
+                .as_array()
+                .unwrap_or(&vec![])
+                .iter()
+                .filter_map(|t| t.as_str().map(|s| s.to_string()))
+                .collect();
+            let is_gguf = tags.iter().any(|t| t.contains("gguf"));
+            HfModelResult {
+                id: m["id"].as_str().unwrap_or("").to_string(),
+                author: m["author"].as_str().map(|s| s.to_string()),
+                downloads: m["downloads"].as_u64(),
+                likes: m["likes"].as_u64(),
+                pipeline_tag: m["pipeline_tag"].as_str().map(|s| s.to_string()),
+                tags,
+                is_gguf,
+            }
+        })
+        .collect();
+
+    Ok(Json(models))
 }
 
 async fn test_provider_connection(
