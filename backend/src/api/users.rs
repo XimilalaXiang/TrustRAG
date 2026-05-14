@@ -65,10 +65,14 @@ async fn register(
     Json(req): Json<RegisterRequest>,
 ) -> Result<(axum::http::StatusCode, Json<AuthResponse>), AppError> {
     let email = req.email.trim().to_lowercase();
+    let display_name = req.display_name.trim().to_string();
     if email.is_empty() || !email.contains('@') || !email.contains('.') || req.password.len() < 8 {
         return Err(AppError::BadRequest(
             "Valid email required and password must be at least 8 characters".into(),
         ));
+    }
+    if display_name.is_empty() {
+        return Err(AppError::BadRequest("Display name is required".into()));
     }
 
     let existing = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM users WHERE email = $1")
@@ -91,7 +95,7 @@ async fn register(
     )
     .bind(&email)
     .bind(&password_hash)
-    .bind(&req.display_name)
+    .bind(&display_name)
     .fetch_one(&state.pool)
     .await?;
 
@@ -118,10 +122,11 @@ async fn login(
     State(state): State<AppState>,
     Json(req): Json<LoginRequest>,
 ) -> Result<Json<AuthResponse>, AppError> {
+    let email = req.email.trim().to_lowercase();
     let row = sqlx::query_as::<_, (Uuid, String, String, String, String)>(
         "SELECT id, email, password_hash, display_name, role FROM users WHERE email = $1 AND status = 'active'",
     )
-    .bind(&req.email)
+    .bind(&email)
     .fetch_optional(&state.pool)
     .await?
     .ok_or_else(|| AppError::Auth("Invalid email or password".into()))?;
@@ -181,8 +186,12 @@ async fn update_profile(
     Json(req): Json<UpdateProfileRequest>,
 ) -> Result<Json<UserResponse>, AppError> {
     if let Some(name) = &req.display_name {
+        let trimmed = name.trim();
+        if trimmed.is_empty() {
+            return Err(AppError::BadRequest("Display name cannot be empty".into()));
+        }
         sqlx::query("UPDATE users SET display_name = $1 WHERE id = $2")
-            .bind(name)
+            .bind(trimmed)
             .bind(auth.id)
             .execute(&state.pool)
             .await?;
