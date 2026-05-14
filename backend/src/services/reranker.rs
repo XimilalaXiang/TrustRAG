@@ -54,11 +54,7 @@ async fn llm_rerank(
 
     let mut passages = String::new();
     for (i, r) in candidates.iter().enumerate() {
-        let snippet = if r.content.len() > 300 {
-            &r.content[..300]
-        } else {
-            &r.content
-        };
+        let snippet: String = r.content.chars().take(300).collect();
         passages.push_str(&format!("[{}] {}\n\n", i, snippet.replace('\n', " ")));
     }
 

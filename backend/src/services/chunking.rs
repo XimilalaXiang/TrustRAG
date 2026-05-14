@@ -63,10 +63,14 @@ pub fn chunk_markdown(markdown: &str, config: &ChunkConfig) -> Vec<TextChunk> {
 
     let raw_chunks: Vec<&str> = splitter.chunks(markdown).collect();
     let mut result = Vec::with_capacity(raw_chunks.len());
+    let mut search_from = 0;
 
     for (i, chunk_text) in raw_chunks.iter().enumerate() {
-        let char_start = markdown.find(chunk_text).unwrap_or(0);
+        let char_start = markdown[search_from..].find(chunk_text)
+            .map(|pos| search_from + pos)
+            .unwrap_or(search_from);
         let char_end = char_start + chunk_text.len();
+        search_from = char_start + 1;
         let heading_path = extract_heading_path(markdown, char_start);
         let content_hash = compute_sha256(chunk_text);
 
