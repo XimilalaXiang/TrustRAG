@@ -12,6 +12,7 @@ import '../../auth/providers/auth_provider.dart';
 import '../../dashboard/providers/workspace_provider.dart';
 import '../../reader/pages/pdf_viewer_page.dart';
 import '../providers/chat_provider.dart';
+import '../providers/review_provider.dart';
 
 class ChatPage extends ConsumerStatefulWidget {
   const ChatPage({super.key});
@@ -559,103 +560,9 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   void _showCitationDetail(Citation citation) {
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Row(
-          children: [
-            Container(
-              width: 28,
-              height: 28,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primary,
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Text(
-                '${citation.index + 1}',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: Theme.of(context).colorScheme.onPrimary,
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                citation.heading ?? '引用 ${citation.index + 1}',
-                style: const TextStyle(fontSize: 16),
-              ),
-            ),
-          ],
-        ),
-        content: SizedBox(
-          width: 500,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (citation.page != null)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Row(
-                    children: [
-                      Icon(Icons.description_outlined, size: 16, color: Colors.grey.shade600),
-                      const SizedBox(width: 4),
-                      Text('第 ${citation.page} 页',
-                          style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
-                      const Spacer(),
-                      Text('相关度: ${(citation.score * 100).toStringAsFixed(1)}%',
-                          style: TextStyle(
-                            color: Theme.of(context).colorScheme.primary,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
-                          )),
-                    ],
-                  ),
-                ),
-              const Divider(),
-              const SizedBox(height: 8),
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxHeight: 300),
-                child: SingleChildScrollView(
-                  child: Text(
-                    citation.text,
-                    style: const TextStyle(fontSize: 14, height: 1.6),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          if (citation.page != null)
-            TextButton.icon(
-              onPressed: () {
-                Navigator.pop(ctx);
-                final ws = ref.read(selectedWorkspaceProvider);
-                if (ws != null) {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => PdfViewerPage(
-                        workspaceId: ws.id,
-                        documentId: citation.documentId,
-                        title: citation.heading ?? '引用来源',
-                        initialPage: citation.page,
-                        highlightText: citation.text.length > 50
-                            ? citation.text.substring(0, 50)
-                            : citation.text,
-                      ),
-                    ),
-                  );
-                }
-              },
-              icon: const Icon(Icons.open_in_new, size: 16),
-              label: const Text('查看原文'),
-            ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('关闭'),
-          ),
-        ],
+      builder: (ctx) => _CitationDetailDialog(
+        citation: citation,
+        parentRef: ref,
       ),
     );
   }
@@ -754,6 +661,354 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                 : const Icon(Icons.send),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _CitationDetailDialog extends ConsumerStatefulWidget {
+  final Citation citation;
+  final WidgetRef parentRef;
+
+  const _CitationDetailDialog({
+    required this.citation,
+    required this.parentRef,
+  });
+
+  @override
+  ConsumerState<_CitationDetailDialog> createState() =>
+      _CitationDetailDialogState();
+}
+
+class _CitationDetailDialogState
+    extends ConsumerState<_CitationDetailDialog> {
+  List<ReviewRecord>? _reviews;
+  bool _loading = true;
+  bool _submitting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadReviews();
+  }
+
+  Future<void> _loadReviews() async {
+    try {
+      final svc = ref.read(reviewServiceProvider);
+      final reviews = await svc.listReviews(widget.citation.chunkId.isEmpty
+          ? widget.citation.documentId
+          : widget.citation.chunkId);
+      if (mounted) setState(() { _reviews = reviews; _loading = false; });
+    } catch (_) {
+      if (mounted) setState(() { _reviews = []; _loading = false; });
+    }
+  }
+
+  Future<void> _submitReview(String status, {String? comment}) async {
+    setState(() => _submitting = true);
+    try {
+      final svc = ref.read(reviewServiceProvider);
+      final citId = widget.citation.chunkId.isEmpty
+          ? widget.citation.documentId
+          : widget.citation.chunkId;
+      await svc.createReview(citId, status: status, comment: comment);
+      await _loadReviews();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('审核提交失败: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  void _showReviewCommentDialog(String status) {
+    final commentCtrl = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(status == 'rejected' ? '标记为错误' : '标记为存疑'),
+        content: TextField(
+          controller: commentCtrl,
+          maxLines: 3,
+          decoration: const InputDecoration(
+            labelText: '备注（可选）',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _submitReview(status,
+                  comment: commentCtrl.text.isEmpty
+                      ? null
+                      : commentCtrl.text);
+            },
+            child: const Text('确认'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Color _statusColor(String status) {
+    switch (status) {
+      case 'approved':
+        return Colors.green;
+      case 'rejected':
+        return Colors.red;
+      case 'flagged':
+        return Colors.orange;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  String _statusLabel(String status) {
+    switch (status) {
+      case 'approved':
+        return '已通过';
+      case 'rejected':
+        return '已拒绝';
+      case 'flagged':
+        return '存疑';
+      case 'pending':
+        return '待审核';
+      default:
+        return status;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = widget.citation;
+    final theme = Theme.of(context);
+
+    return AlertDialog(
+      title: Row(
+        children: [
+          Container(
+            width: 28,
+            height: 28,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: theme.colorScheme.primary,
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(
+              '${c.index + 1}',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: theme.colorScheme.onPrimary,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              c.heading ?? '引用 ${c.index + 1}',
+              style: const TextStyle(fontSize: 16),
+            ),
+          ),
+        ],
+      ),
+      content: SizedBox(
+        width: 520,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (c.page != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  children: [
+                    Icon(Icons.description_outlined,
+                        size: 16, color: Colors.grey.shade600),
+                    const SizedBox(width: 4),
+                    Text('第 ${c.page} 页',
+                        style: TextStyle(
+                            color: Colors.grey.shade600, fontSize: 13)),
+                    const Spacer(),
+                    Text(
+                        '相关度: ${(c.score * 100).toStringAsFixed(1)}%',
+                        style: TextStyle(
+                          color: theme.colorScheme.primary,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                        )),
+                  ],
+                ),
+              ),
+            const Divider(),
+            const SizedBox(height: 8),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 200),
+              child: SingleChildScrollView(
+                child: Text(
+                  c.text,
+                  style: const TextStyle(fontSize: 14, height: 1.6),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text('审核操作',
+                style: theme.textTheme.labelLarge
+                    ?.copyWith(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                _ReviewActionButton(
+                  icon: Icons.check_circle_outline,
+                  label: '通过',
+                  color: Colors.green,
+                  loading: _submitting,
+                  onTap: () => _submitReview('approved'),
+                ),
+                const SizedBox(width: 8),
+                _ReviewActionButton(
+                  icon: Icons.cancel_outlined,
+                  label: '错误',
+                  color: Colors.red,
+                  loading: _submitting,
+                  onTap: () => _showReviewCommentDialog('rejected'),
+                ),
+                const SizedBox(width: 8),
+                _ReviewActionButton(
+                  icon: Icons.flag_outlined,
+                  label: '存疑',
+                  color: Colors.orange,
+                  loading: _submitting,
+                  onTap: () => _showReviewCommentDialog('flagged'),
+                ),
+              ],
+            ),
+            if (_loading)
+              const Padding(
+                padding: EdgeInsets.only(top: 12),
+                child: Center(
+                    child: SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2))),
+              )
+            else if (_reviews != null && _reviews!.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Text('审核记录',
+                  style: theme.textTheme.labelMedium
+                      ?.copyWith(color: Colors.grey.shade600)),
+              const SizedBox(height: 4),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 120),
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: _reviews!.length,
+                  separatorBuilder: (_, __) =>
+                      const Divider(height: 1),
+                  itemBuilder: (_, i) {
+                    final r = _reviews![i];
+                    return ListTile(
+                      dense: true,
+                      leading: Icon(
+                        r.status == 'approved'
+                            ? Icons.check_circle
+                            : r.status == 'rejected'
+                                ? Icons.cancel
+                                : Icons.flag,
+                        color: _statusColor(r.status),
+                        size: 18,
+                      ),
+                      title: Text(_statusLabel(r.status),
+                          style: const TextStyle(fontSize: 13)),
+                      subtitle: r.comment != null
+                          ? Text(r.comment!,
+                              style: const TextStyle(fontSize: 12),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis)
+                          : null,
+                      trailing: Text(
+                        r.createdAt.length >= 16
+                            ? r.createdAt.substring(0, 16).replaceFirst('T', ' ')
+                            : r.createdAt,
+                        style: TextStyle(
+                            fontSize: 11,
+                            color: Colors.grey.shade500),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        if (c.page != null)
+          TextButton.icon(
+            onPressed: () {
+              Navigator.pop(context);
+              final ws = widget.parentRef.read(selectedWorkspaceProvider);
+              if (ws != null) {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => PdfViewerPage(
+                      workspaceId: ws.id,
+                      documentId: c.documentId,
+                      title: c.heading ?? '引用来源',
+                      initialPage: c.page,
+                      highlightText: c.text.length > 50
+                          ? c.text.substring(0, 50)
+                          : c.text,
+                    ),
+                  ),
+                );
+              }
+            },
+            icon: const Icon(Icons.open_in_new, size: 16),
+            label: const Text('查看原文'),
+          ),
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('关闭'),
+        ),
+      ],
+    );
+  }
+}
+
+class _ReviewActionButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final bool loading;
+  final VoidCallback onTap;
+
+  const _ReviewActionButton({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.loading,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton.icon(
+      onPressed: loading ? null : onTap,
+      icon: Icon(icon, size: 16, color: loading ? Colors.grey : color),
+      label: Text(label,
+          style: TextStyle(
+              color: loading ? Colors.grey : color, fontSize: 13)),
+      style: OutlinedButton.styleFrom(
+        side: BorderSide(color: color.withValues(alpha: 0.4)),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       ),
     );
   }
