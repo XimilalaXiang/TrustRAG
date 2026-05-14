@@ -1,3 +1,4 @@
+pub mod chunking;
 pub mod document;
 pub mod rag;
 pub mod llm;

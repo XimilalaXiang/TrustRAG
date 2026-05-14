@@ -103,15 +103,16 @@
 - 涉及文件：`doc-processor/app/processors/position_mapper.py`
 - 验收：给定 chunk → 返回精确的页码 + 位置
 
-#### 🔲 2.4 文本分块模块 (Rust)
-- [ ] 集成 text-splitter 或 chunkedrs crate
-- [ ] Markdown-aware 分块（保留标题上下文）
-- [ ] 目标 500-1000 tokens/chunk，50-100 tokens 重叠
-- [ ] content_hash 去重
+#### ✅ 2.4 文本分块模块 (Rust)
+- [x] 集成 text-splitter crate (MarkdownSplitter)
+- [x] Markdown-aware 分块（基于语义边界，保留标题结构）
+- [x] 可配置分块大小 + 重叠
+- [x] content_hash (SHA-256) 去重
+- [x] heading_path 提取（从分块位置回溯标题层级）
+- [x] 10 个单元测试通过
 - 参考：`docs/rag-pipeline.md` → 文档摄入管线 §6
-- 参考：`.notes/07-component-sdk-map.md` → 文本分块
-- 涉及文件：新建 `backend/src/services/chunking.rs`
-- 验收：输入 Markdown 全文 → 输出分块列表（含 heading_path, page_start/end）
+- 涉及文件：`backend/src/services/chunking.rs`
+- 验收：输入 Markdown 全文 → 输出分块列表（含 heading_path, char_start/end, hash）
 
 #### 🔲 2.5 Embedding + pgvector 存储
 - [ ] 集成 async-openai embedding API 或 fastembed
