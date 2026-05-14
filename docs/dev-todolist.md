@@ -144,13 +144,14 @@
 - 涉及文件：`backend/src/services/search.rs`, `backend/src/api/search.rs`
 - 验收：混合检索返回排序后的分块列表 + 元数据
 
-#### 🔲 2.8 文档处理编排（异步任务）
-- [ ] Rust 后端调用 Python doc-processor HTTP API
-- [ ] 异步任务队列（apalis 或简单 tokio::spawn）
-- [ ] processing_status 状态机管理
-- [ ] 错误处理 + 重试
+#### ✅ 2.8 文档处理编排（异步任务）
+- [x] Rust 后端调用 Python doc-processor HTTP API（reqwest multipart）
+- [x] 异步任务（tokio::spawn 触发）
+- [x] processing_status 状态机管理（pending → processing → chunking → embedding → ready / failed）
+- [x] 错误处理 + 状态回滚
+- [x] 上传和重新处理自动触发异步管线
 - 参考：`docs/rag-pipeline.md` → 文档摄入管线全流程
-- 涉及文件：`backend/src/services/document.rs`, `backend/src/workers/`
+- 涉及文件：`backend/src/services/document.rs`, `backend/src/api/documents.rs`
 - 验收：上传文档 → 自动触发处理 → 状态更新 → 分块+索引完成
 
 ---
