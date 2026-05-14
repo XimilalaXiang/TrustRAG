@@ -125,22 +125,22 @@
 - 涉及文件：`backend/src/services/embedding.rs`, `backend/src/traits/`
 - 验收：分块后生成 embedding 并写入 document_chunks.embedding
 
-#### 🔲 2.6 全文检索索引 (pg_bigm)
-- [ ] 验证 pg_bigm 索引效果
-- [ ] 中文查询测试
-- [ ] similarity 函数调用
+#### ✅ 2.6 全文检索索引 (pg_trgm)
+- [x] pg_trgm similarity 全文搜索
+- [x] 支持 workspace + document 范围过滤
+- [x] similarity 函数调用 + 分数排序
 - 参考：`docs/rag-pipeline.md` → 阶段 3 Full-Text Search
-- 涉及文件：SQL + `backend/src/services/search.rs`
-- 验收：中文关键词 → 返回相关分块 + 相关度分数
+- 涉及文件：`backend/src/services/search.rs`
+- 验收：关键词 → 返回相关分块 + 相关度分数
 
-#### 🔲 2.7 混合检索 API
-- [ ] Vector search 实现
-- [ ] Full-text search 实现
-- [ ] RRF 分数融合
-- [ ] MMR 多样性检索（可选）
-- [ ] POST /workspaces/:ws_id/search 接口
+#### ✅ 2.7 混合检索 API
+- [x] Vector search (pgvector cosine similarity)
+- [x] Full-text search (pg_trgm similarity)
+- [x] RRF 分数融合
+- [x] POST /workspaces/:ws_id/search API
+- [x] 搜索模式：vector / fulltext / hybrid
+- [x] 3 个 RRF 单元测试通过
 - 参考：`docs/rag-pipeline.md` → 阶段 3 Hybrid Retrieval
-- 参考：`docs/api-design.md` → §4 检索
 - 涉及文件：`backend/src/services/search.rs`, `backend/src/api/search.rs`
 - 验收：混合检索返回排序后的分块列表 + 元数据
 

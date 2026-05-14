@@ -37,6 +37,7 @@ async fn main() -> anyhow::Result<()> {
         jwt_secret: config.jwt_secret.clone(),
         storage,
         max_upload_size: config.max_upload_size_mb,
+        embedding_provider: None, // configured via model settings at runtime
     };
 
     let app = Router::new()
@@ -44,6 +45,7 @@ async fn main() -> anyhow::Result<()> {
         .merge(api::users::router())
         .merge(api::workspaces::router())
         .merge(api::documents::router())
+        .merge(api::search::router())
         .with_state(state)
         .layer(axum::Extension(JwtSecret(config.jwt_secret.clone())))
         .layer(DefaultBodyLimit::max(upload_limit as usize))
