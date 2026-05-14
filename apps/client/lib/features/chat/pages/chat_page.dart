@@ -420,9 +420,14 @@ class _ChatPageState extends ConsumerState<ChatPage> {
           controller: _scrollController,
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
           itemCount: messages.length + (_streamingContent.isNotEmpty ? 1 : 0),
+          addAutomaticKeepAlives: false,
+          addRepaintBoundaries: true,
           itemBuilder: (context, i) {
             if (i < messages.length) {
-              return _buildMessageBubble(messages[i]);
+              return RepaintBoundary(
+                key: ValueKey(messages[i].id),
+                child: _buildMessageBubble(messages[i]),
+              );
             }
             return _buildStreamingBubble();
           },

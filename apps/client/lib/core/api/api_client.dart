@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:dio_cache_interceptor/dio_cache_interceptor.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiClient {
@@ -31,6 +32,14 @@ class ApiClient {
         handler.next(error);
       },
     ));
+
+    final cacheStore = MemCacheStore(maxSize: 50, maxEntrySize: 524288);
+    final cacheOptions = CacheOptions(
+      store: cacheStore,
+      policy: CachePolicy.request,
+      maxStale: const Duration(minutes: 5),
+    );
+    dio.interceptors.add(DioCacheInterceptor(options: cacheOptions));
   }
 
   static Future<void> saveToken(String token) async {
