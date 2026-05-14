@@ -82,6 +82,114 @@ pub fn analyze_query(query: &str, history: &[LlmMessage]) -> QueryAnalysis {
     }
 }
 
+// ── Query Expansion ──
+
+pub async fn expand_query(
+    query: &str,
+    llm_provider: &dyn LlmProvider,
+) -> Vec<String> {
+    let prompt = format!(
+        "Given the user query below, generate 2 alternative search queries that capture \
+         different aspects or phrasings of the same information need. Return ONLY a JSON \
+         array of strings, no explanation.\n\nUser query: {}\n\nAlternative queries:",
+        query
+    );
+
+    let req = LlmRequest {
+        messages: vec![
+            LlmMessage {
+                role: "system".to_string(),
+                content: "You are a search query expansion assistant. Output only a JSON array of strings.".to_string(),
+            },
+            LlmMessage {
+                role: "user".to_string(),
+                content: prompt,
+            },
+        ],
+        temperature: 0.3,
+        max_tokens: 200,
+        stream: false,
+    };
+
+    match llm_provider.generate(&req).await {
+        Ok(resp) => {
+            let content = resp.content.trim().to_string();
+            let json_str = if let Some(start) = content.find('[') {
+                if let Some(end) = content.rfind(']') {
+                    &content[start..=end]
+                } else {
+                    &content
+                }
+            } else {
+                &content
+            };
+
+            match serde_json::from_str::<Vec<String>>(json_str) {
+                Ok(queries) => {
+                    tracing::info!(original = query, expanded = ?queries, "Query expansion succeeded");
+                    queries.into_iter().take(3).collect()
+                }
+                Err(_) => {
+                    tracing::warn!("Failed to parse query expansion response: {}", content);
+                    vec![]
+                }
+            }
+        }
+        Err(e) => {
+            tracing::warn!("Query expansion LLM call failed: {}", e);
+            vec![]
+        }
+    }
+}
+
+async fn search_with_expansion(
+    pool: &PgPool,
+    embedding_provider: &dyn EmbeddingProvider,
+    llm_provider: &dyn LlmProvider,
+    workspace_id: Uuid,
+    query: &str,
+    search_config: &SearchConfig,
+    document_scope: Option<&[Uuid]>,
+    expand: bool,
+) -> anyhow::Result<Vec<SearchResult>> {
+    let primary = search::hybrid_search(
+        pool, embedding_provider, workspace_id, query, search_config, document_scope,
+    ).await?;
+
+    if !expand {
+        return Ok(primary.results);
+    }
+
+    let expanded_queries = expand_query(query, llm_provider).await;
+    if expanded_queries.is_empty() {
+        return Ok(primary.results);
+    }
+
+    let mut all_results = primary.results;
+    let mut seen_ids: std::collections::HashSet<Uuid> = all_results.iter().map(|r| r.chunk_id).collect();
+
+    for eq in &expanded_queries {
+        match search::hybrid_search(
+            pool, embedding_provider, workspace_id, eq, search_config, document_scope,
+        ).await {
+            Ok(resp) => {
+                for r in resp.results {
+                    if seen_ids.insert(r.chunk_id) {
+                        all_results.push(r);
+                    }
+                }
+            }
+            Err(e) => {
+                tracing::warn!("Expanded query search failed for '{}': {}", eq, e);
+            }
+        }
+    }
+
+    all_results.sort_by(|a, b| b.relevance_score.partial_cmp(&a.relevance_score).unwrap_or(std::cmp::Ordering::Equal));
+
+    Ok(all_results)
+}
+
 // ── Context Assembly ──
 
 #[derive(Debug, Clone, Serialize)]
@@ -232,6 +340,7 @@ pub struct RagConfig {
     pub max_tokens: u32,
     pub language: String,
     pub rerank: crate::services::reranker::ReRankConfig,
+    pub query_expansion: bool,
 }
 
 impl Default for RagConfig {
@@ -245,6 +354,7 @@ impl Default for RagConfig {
             max_tokens: 4096,
             language: "zh".to_string(),
             rerank: crate::services::reranker::ReRankConfig::default(),
+            query_expansion: false,
         }
     }
 }
@@ -291,7 +401,6 @@ pub async fn run_rag_pipeline(
         });
     }
 
-    // Use the hybrid_search service which handles embedding internally
     let search_config = SearchConfig {
         mode: config.search_mode.clone(),
         top_k: config.search_top_k,
@@ -301,22 +410,20 @@ pub async fn run_rag_pipeline(
         rrf_k: 60.0,
     };
 
-    let search_response = search::hybrid_search(
+    let raw_results = search_with_expansion(
         pool,
         embedding_provider,
+        llm_provider,
         workspace_id,
         &analysis.rewritten_query,
         &search_config,
-        if document_scope.is_empty() {
-            None
-        } else {
-            Some(document_scope)
-        },
+        if document_scope.is_empty() { None } else { Some(document_scope) },
+        config.query_expansion,
     )
     .await?;
 
     let results = crate::services::reranker::rerank(
-        search_response.results,
+        raw_results,
         &analysis.rewritten_query,
         &config.rerank,
         llm_provider,
@@ -392,22 +499,20 @@ pub async fn run_rag_pipeline_stream(
         rrf_k: 60.0,
     };
 
-    let search_response = search::hybrid_search(
+    let raw_results = search_with_expansion(
         pool,
         embedding_provider,
+        llm_provider,
         workspace_id,
         &analysis.rewritten_query,
         &search_config,
-        if document_scope.is_empty() {
-            None
-        } else {
-            Some(document_scope)
-        },
+        if document_scope.is_empty() { None } else { Some(document_scope) },
+        config.query_expansion,
     )
     .await?;
 
     let results = crate::services::reranker::rerank(
-        search_response.results,
+        raw_results,
         &analysis.rewritten_query,
         &config.rerank,
         llm_provider,
