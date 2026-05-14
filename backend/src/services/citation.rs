@@ -33,7 +33,9 @@ pub enum VerificationResult {
 
 /// Extract citation markers [1], [2], etc. from LLM response text
 pub fn extract_citations(text: &str) -> Vec<CitationRef> {
-    let re = Regex::new(r"\[(\d+)\]").unwrap();
+    use std::sync::LazyLock;
+    static RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\[(\d+)\]").unwrap());
+    let re = &*RE;
     let mut refs = Vec::new();
     let mut seen = std::collections::HashSet::new();
 

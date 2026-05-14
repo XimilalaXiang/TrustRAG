@@ -64,14 +64,15 @@ async fn register(
     State(state): State<AppState>,
     Json(req): Json<RegisterRequest>,
 ) -> Result<(axum::http::StatusCode, Json<AuthResponse>), AppError> {
-    if req.email.is_empty() || req.password.len() < 8 {
+    let email = req.email.trim().to_lowercase();
+    if email.is_empty() || !email.contains('@') || !email.contains('.') || req.password.len() < 8 {
         return Err(AppError::BadRequest(
-            "Email required and password must be at least 8 characters".into(),
+            "Valid email required and password must be at least 8 characters".into(),
         ));
     }
 
     let existing = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM users WHERE email = $1")
-        .bind(&req.email)
+        .bind(&email)
         .fetch_one(&state.pool)
         .await?;
 
@@ -88,7 +89,7 @@ async fn register(
     let user = sqlx::query_as::<_, (Uuid, String, String, String)>(
         "INSERT INTO users (email, password_hash, display_name) VALUES ($1, $2, $3) RETURNING id, email, display_name, role",
     )
-    .bind(&req.email)
+    .bind(&email)
     .bind(&password_hash)
     .bind(&req.display_name)
     .fetch_one(&state.pool)

@@ -325,11 +325,14 @@ async fn send_message(
         }
     }
 
-    // Load conversation history
+    // Load prior conversation history (exclude the user message we just inserted)
     let history_rows = sqlx::query_as::<_, (String, String)>(
-        "SELECT role, content FROM messages
-         WHERE conversation_id = $1
-         ORDER BY created_at ASC",
+        "SELECT role, content FROM (
+            SELECT role, content, created_at FROM messages
+            WHERE conversation_id = $1
+            ORDER BY created_at DESC
+            OFFSET 1
+         ) sub ORDER BY created_at ASC",
     )
     .bind(conv_id)
     .fetch_all(&state.pool)
@@ -550,9 +553,8 @@ fn build_sse_stream(
                         }
                     }
 
-                    // Save assistant message
                     let latency = start.elapsed().as_millis() as i32;
-                    let _ = sqlx::query(
+                    if let Err(e) = sqlx::query(
                         "INSERT INTO messages (id, conversation_id, role, content, model_name, prompt_tokens, completion_tokens, latency_ms)
                          VALUES ($1, $2, 'assistant', $3, $4, $5, $6, $7)",
                     )
@@ -564,7 +566,13 @@ fn build_sse_stream(
                     .bind(final_completion_tokens as i32)
                     .bind(latency)
                     .execute(&pool)
-                    .await;
+                    .await {
+                        tracing::error!(
+                            message_id = %message_id,
+                            error = %e,
+                            "Failed to save assistant message to database"
+                        );
+                    }
 
                     let end_data = serde_json::to_string(&MessageEndEvent {
                         message_id,
@@ -635,7 +643,7 @@ fn build_sse_stream(
             }
 
             let latency = start.elapsed().as_millis() as i32;
-            let _ = sqlx::query(
+            if let Err(e) = sqlx::query(
                 "INSERT INTO messages (id, conversation_id, role, content, model_name, prompt_tokens, completion_tokens, latency_ms)
                  VALUES ($1, $2, 'assistant', $3, $4, $5, $6, $7)",
             )
@@ -647,7 +655,13 @@ fn build_sse_stream(
             .bind(final_completion_tokens as i32)
             .bind(latency)
             .execute(&pool)
-            .await;
+            .await {
+                tracing::error!(
+                    message_id = %message_id,
+                    error = %e,
+                    "Failed to save chitchat message to database"
+                );
+            }
 
             let end_data = serde_json::to_string(&MessageEndEvent {
                 message_id,
