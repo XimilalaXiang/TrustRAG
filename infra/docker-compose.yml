@@ -7,7 +7,8 @@ services:
     ports:
       - "8080:8080"
     environment:
-      RUST_LOG: trustrag_backend=debug,tower_http=debug
+      RUST_LOG: trustrag_backend=debug,tower_http=info,sqlx=warn
+      LOG_FORMAT: json
       TRUSTRAG__LISTEN_ADDR: "0.0.0.0:8080"
       TRUSTRAG__DATABASE_URL: postgres://trustrag:trustrag@postgres:5432/trustrag
       TRUSTRAG__REDIS_URL: redis://redis:6379
@@ -26,6 +27,12 @@ services:
         condition: service_healthy
       minio-init:
         condition: service_completed_successfully
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+        tag: "trustrag-backend"
     restart: unless-stopped
 
   doc-processor:
@@ -34,6 +41,12 @@ services:
     container_name: trustrag-doc-processor
     ports:
       - "8081:8081"
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+        tag: "trustrag-doc-processor"
     restart: unless-stopped
 
   postgres:
@@ -53,6 +66,11 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    logging:
+      driver: json-file
+      options:
+        max-size: "30m"
+        max-file: "3"
     restart: unless-stopped
 
   redis:
