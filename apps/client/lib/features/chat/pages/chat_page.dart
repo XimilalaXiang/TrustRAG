@@ -27,6 +27,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   bool _isSending = false;
   String _streamingContent = '';
   List<Citation> _streamingCitations = [];
+  List<String> _pendingSuggestions = [];
   StreamController<String>? _streamingTextController;
 
   @override
@@ -159,6 +160,18 @@ class _ChatPageState extends ConsumerState<ChatPage> {
               });
               _streamingTextController?.add(delta);
               _scrollToBottom();
+            } else if (eventType == 'suggestions') {
+              final questions = (event['questions'] as List?)
+                  ?.map((e) => e.toString())
+                  .toList() ?? [];
+              final msgs = ref.read(messagesProvider);
+              if (msgs.isNotEmpty && msgs.last.role == 'assistant') {
+                final updated = msgs.last.copyWith(suggestions: questions);
+                ref.read(messagesProvider.notifier).state = [
+                  ...msgs.sublist(0, msgs.length - 1),
+                  updated,
+                ];
+              }
             } else if (eventType == 'message_end') {
               final fullContent = _streamingContent;
               if (fullContent.isNotEmpty) {
@@ -440,8 +453,36 @@ class _ChatPageState extends ConsumerState<ChatPage> {
             ),
             if (!isUser && msg.citations.isNotEmpty)
               _buildCitationCards(msg.citations),
+            if (!isUser && msg.suggestions.isNotEmpty)
+              _buildSuggestionPills(msg.suggestions),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildSuggestionPills(List<String> suggestions) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: suggestions.map((q) {
+          return ActionChip(
+            label: Text(q, style: const TextStyle(fontSize: 13)),
+            avatar: Icon(Icons.arrow_forward_ios,
+                size: 12, color: Theme.of(context).colorScheme.primary),
+            backgroundColor:
+                Theme.of(context).colorScheme.surfaceContainerHighest,
+            side: BorderSide(
+              color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+            ),
+            onPressed: () {
+              _controller.text = q;
+              _sendMessage();
+            },
+          );
+        }).toList(),
       ),
     );
   }

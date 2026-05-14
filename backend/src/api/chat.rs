@@ -116,6 +116,11 @@ struct MessageEndEvent {
 }
 
 #[derive(Serialize)]
+struct SuggestionsEvent {
+    questions: Vec<String>,
+}
+
+#[derive(Serialize)]
 struct NonStreamingResponse {
     message: MessageResponse,
     citations: Vec<CitationEvent>,
@@ -548,6 +553,16 @@ fn build_sse_stream(
                     }).unwrap_or_default();
                     yield Ok(Event::default().event("message_end").data(end_data));
 
+                    // Generate follow-up suggestions
+                    let suggestions = rag::generate_follow_up_questions(
+                        llm_provider.as_ref(), &query, &full_content
+                    ).await;
+                    if !suggestions.is_empty() {
+                        if let Ok(data) = serde_json::to_string(&SuggestionsEvent { questions: suggestions }) {
+                            yield Ok(Event::default().event("suggestions").data(data));
+                        }
+                    }
+
                     sources
                 }
                 Err(e) => {
@@ -619,6 +634,16 @@ fn build_sse_stream(
                 latency_ms: start.elapsed().as_millis() as u64,
             }).unwrap_or_default();
             yield Ok(Event::default().event("message_end").data(end_data));
+
+            // Generate follow-up suggestions for chitchat too
+            let suggestions = rag::generate_follow_up_questions(
+                llm_provider.as_ref(), &query, &full_content
+            ).await;
+            if !suggestions.is_empty() {
+                if let Ok(data) = serde_json::to_string(&SuggestionsEvent { questions: suggestions }) {
+                    yield Ok(Event::default().event("suggestions").data(data));
+                }
+            }
 
             vec![]
         };

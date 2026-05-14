@@ -63,6 +63,7 @@ class ChatMessage {
   final String content;
   final String? modelName;
   final List<Citation> citations;
+  final List<String> suggestions;
   final DateTime createdAt;
 
   ChatMessage({
@@ -71,6 +72,7 @@ class ChatMessage {
     required this.content,
     this.modelName,
     this.citations = const [],
+    this.suggestions = const [],
     required this.createdAt,
   });
 
@@ -84,13 +86,17 @@ class ChatMessage {
     );
   }
 
-  ChatMessage copyWith({List<Citation>? citations}) {
+  ChatMessage copyWith({
+    List<Citation>? citations,
+    List<String>? suggestions,
+  }) {
     return ChatMessage(
       id: id,
       role: role,
       content: content,
       modelName: modelName,
       citations: citations ?? this.citations,
+      suggestions: suggestions ?? this.suggestions,
       createdAt: createdAt,
     );
   }

@@ -680,4 +680,82 @@ mod tests {
         assert_eq!(config.temperature, 0.1);
         assert_eq!(config.language, "zh");
     }
+
+    #[test]
+    fn test_parse_follow_up_questions() {
+        let raw = r#"["What about X?", "How does Y work?", "Can you compare Z?"]"#;
+        let parsed = parse_follow_up_questions(raw);
+        assert_eq!(parsed.len(), 3);
+        assert_eq!(parsed[0], "What about X?");
+    }
+
+    #[test]
+    fn test_parse_follow_up_questions_fallback() {
+        let raw = "1. Question one?\n2. Question two?";
+        let parsed = parse_follow_up_questions(raw);
+        assert_eq!(parsed.len(), 2);
+    }
+}
+
+pub async fn generate_follow_up_questions(
+    llm: &dyn LlmProvider,
+    query: &str,
+    answer: &str,
+) -> Vec<String> {
+    let prompt = format!(
+        "Based on the following Q&A, generate exactly 3 short follow-up questions the user might ask next.\n\
+        Return as a JSON array of strings. Example: [\"question1\", \"question2\", \"question3\"]\n\n\
+        User question: {query}\n\
+        Answer (abbreviated): {abbreviated}\n\n\
+        JSON array:",
+        query = query,
+        abbreviated = if answer.len() > 500 { &answer[..500] } else { answer },
+    );
+
+    let req = LlmRequest {
+        messages: vec![LlmMessage {
+            role: "user".to_string(),
+            content: prompt,
+        }],
+        temperature: 0.7,
+        max_tokens: 200,
+        stream: false,
+    };
+
+    match llm.generate(&req).await {
+        Ok(resp) => parse_follow_up_questions(&resp.content),
+        Err(e) => {
+            tracing::warn!("Failed to generate follow-up questions: {e}");
+            vec![]
+        }
+    }
+}
+
+pub fn parse_follow_up_questions(text: &str) -> Vec<String> {
+    if let Ok(arr) = serde_json::from_str::<Vec<String>>(text) {
+        return arr.into_iter().take(3).collect();
+    }
+
+    let trimmed = text.trim();
+    if let Some(start) = trimmed.find('[') {
+        if let Some(end) = trimmed.rfind(']') {
+            if let Ok(arr) = serde_json::from_str::<Vec<String>>(&trimmed[start..=end]) {
+                return arr.into_iter().take(3).collect();
+            }
+        }
+    }
+
+    let lines: Vec<String> = trimmed
+        .lines()
+        .filter_map(|l| {
+            let l = l.trim();
+            let stripped = l
+                .trim_start_matches(|c: char| c.is_ascii_digit() || c == '.' || c == '-' || c == '*' || c == ' ');
+            let stripped = stripped.trim().trim_matches('"').trim();
+            if stripped.len() > 5 { Some(stripped.to_string()) } else { None }
+        })
+        .take(3)
+        .collect();
+
+    lines
 }
