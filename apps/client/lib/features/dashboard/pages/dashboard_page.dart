@@ -20,10 +20,18 @@ class DashboardPage extends ConsumerStatefulWidget {
 class _DashboardPageState extends ConsumerState<DashboardPage> {
   int _selectedIndex = 0;
 
+  static const _navItems = <({IconData icon, IconData selectedIcon, String label})>[
+    (icon: Icons.chat_outlined, selectedIcon: Icons.chat, label: '对话'),
+    (icon: Icons.folder_outlined, selectedIcon: Icons.folder, label: '资料库'),
+    (icon: Icons.workspaces_outlined, selectedIcon: Icons.workspaces, label: '工作区'),
+    (icon: Icons.search_outlined, selectedIcon: Icons.search, label: '搜索'),
+    (icon: Icons.settings_outlined, selectedIcon: Icons.settings, label: '设置'),
+  ];
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isWide = MediaQuery.of(context).size.width > 768;
+    final width = MediaQuery.of(context).size.width;
     final authState = ref.watch(authProvider);
 
     if (authState.status == AuthStatus.unauthenticated) {
@@ -32,11 +40,42 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
       });
     }
 
+    final contentArea = AnimatedSwitcher(
+      duration: const Duration(milliseconds: 250),
+      switchInCurve: Curves.easeOut,
+      switchOutCurve: Curves.easeIn,
+      child: KeyedSubtree(
+        key: ValueKey<int>(_selectedIndex),
+        child: _buildContent(),
+      ),
+    );
+
+    // <600px: bottom navigation (mobile)
+    if (width < 600) {
+      return Scaffold(
+        body: contentArea,
+        bottomNavigationBar: NavigationBar(
+          selectedIndex: _selectedIndex,
+          onDestinationSelected: (i) => setState(() => _selectedIndex = i),
+          destinations: _navItems
+              .map((n) => NavigationDestination(
+                    icon: Icon(n.icon),
+                    selectedIcon: Icon(n.selectedIcon),
+                    label: n.label,
+                  ))
+              .toList(),
+        ),
+      );
+    }
+
+    // ≥600px: side navigation rail
+    final extended = width >= 900;
+
     return Scaffold(
       body: Row(
         children: [
           NavigationRail(
-            extended: isWide,
+            extended: extended,
             selectedIndex: _selectedIndex,
             onDestinationSelected: (i) => setState(() => _selectedIndex = i),
             leading: Padding(
@@ -49,7 +88,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                     color: theme.colorScheme.primary,
                     size: 28,
                   ),
-                  if (isWide) ...[
+                  if (extended) ...[
                     const SizedBox(width: 8),
                     Text(
                       'TrustRAG',
@@ -77,46 +116,16 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                 ),
               ),
             ),
-            destinations: const [
-              NavigationRailDestination(
-                icon: Icon(Icons.chat_outlined),
-                selectedIcon: Icon(Icons.chat),
-                label: Text('对话'),
-              ),
-              NavigationRailDestination(
-                icon: Icon(Icons.folder_outlined),
-                selectedIcon: Icon(Icons.folder),
-                label: Text('资料库'),
-              ),
-              NavigationRailDestination(
-                icon: Icon(Icons.workspaces_outlined),
-                selectedIcon: Icon(Icons.workspaces),
-                label: Text('工作区'),
-              ),
-              NavigationRailDestination(
-                icon: Icon(Icons.search_outlined),
-                selectedIcon: Icon(Icons.search),
-                label: Text('搜索'),
-              ),
-              NavigationRailDestination(
-                icon: Icon(Icons.settings_outlined),
-                selectedIcon: Icon(Icons.settings),
-                label: Text('设置'),
-              ),
-            ],
+            destinations: _navItems
+                .map((n) => NavigationRailDestination(
+                      icon: Icon(n.icon),
+                      selectedIcon: Icon(n.selectedIcon),
+                      label: Text(n.label),
+                    ))
+                .toList(),
           ),
           const VerticalDivider(width: 1),
-          Expanded(
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 250),
-              switchInCurve: Curves.easeOut,
-              switchOutCurve: Curves.easeIn,
-              child: KeyedSubtree(
-                key: ValueKey<int>(_selectedIndex),
-                child: _buildContent(),
-              ),
-            ),
-          ),
+          Expanded(child: contentArea),
         ],
       ),
     );
