@@ -1,0 +1,100 @@
+version: "3.9"
+
+services:
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: trustrag-backend
+    ports:
+      - "8080:8080"
+    environment:
+      TRUSTRAG__DATABASE_URL: postgres://trustrag:trustrag@postgres:5432/trustrag
+      TRUSTRAG__REDIS_URL: redis://redis:6379
+      TRUSTRAG__MINIO_ENDPOINT: http://minio:9000
+      TRUSTRAG__MINIO_ACCESS_KEY: minioadmin
+      TRUSTRAG__MINIO_SECRET_KEY: minioadmin
+      TRUSTRAG__DOC_PROCESSOR_URL: http://doc-processor:8081
+      TRUSTRAG__JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  doc-processor:
+    build:
+      context: ../doc-processor
+    container_name: trustrag-doc-processor
+    ports:
+      - "8081:8081"
+    restart: unless-stopped
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: trustrag-postgres
+    environment:
+      POSTGRES_DB: trustrag
+      POSTGRES_USER: trustrag
+      POSTGRES_PASSWORD: trustrag
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U trustrag"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: trustrag-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  minio:
+    image: minio/minio
+    container_name: trustrag-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    volumes:
+      - minio_data:/data
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: trustrag-caddy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:
+  caddy_data:
+  caddy_config:
