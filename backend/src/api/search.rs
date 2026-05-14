@@ -70,8 +70,8 @@ async fn search(
 
     let doc_ids = req.document_ids.as_deref();
 
-    let embedding_provider = state
-        .embedding_provider
+    let embedding_guard = state.embedding_provider.read().await;
+    let embedding_provider = embedding_guard
         .as_ref()
         .ok_or_else(|| AppError::BadRequest("No embedding provider configured".into()))?;
 

@@ -61,9 +61,11 @@ async fn main() -> anyhow::Result<()> {
         jwt_secret: config.jwt_secret.clone(),
         storage,
         max_upload_size: config.max_upload_size_mb,
-        embedding_provider: None,
+        embedding_provider: std::sync::Arc::new(tokio::sync::RwLock::new(None)),
         doc_processor_url: config.doc_processor_url.clone(),
     };
+
+    api::embedding_configs::init_embedding_provider(&state).await;
 
     let trace_layer = TraceLayer::new_for_http()
         .make_span_with(|request: &axum::http::Request<_>| {
@@ -101,6 +103,7 @@ async fn main() -> anyhow::Result<()> {
         .merge(api::documents::router())
         .merge(api::search::router())
         .merge(api::models::router())
+        .merge(api::embedding_configs::router())
         .merge(api::chat::router())
         .merge(api::citations::router())
         .with_state(state)

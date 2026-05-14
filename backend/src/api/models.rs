@@ -88,7 +88,7 @@ pub struct TestConnectionResponse {
 
 // ── Simple XOR-based obfuscation for API keys ──
 // Production systems should use AES-256-GCM with a proper KMS.
-fn encrypt_api_key(key: &str, secret: &str) -> String {
+pub fn encrypt_api_key(key: &str, secret: &str) -> String {
     let secret_bytes = secret.as_bytes();
     let encrypted: Vec<u8> = key
         .as_bytes()

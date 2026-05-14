@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use sqlx::PgPool;
+use tokio::sync::RwLock;
 
 use crate::services::storage::StorageService;
 use crate::traits::embedding_provider::EmbeddingProvider;
@@ -13,6 +14,7 @@ pub mod models;
 pub mod chat;
 pub mod citations;
 pub mod reviews;
+pub mod embedding_configs;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -20,6 +22,6 @@ pub struct AppState {
     pub jwt_secret: String,
     pub storage: StorageService,
     pub max_upload_size: u64,
-    pub embedding_provider: Option<Arc<dyn EmbeddingProvider>>,
+    pub embedding_provider: Arc<RwLock<Option<Arc<dyn EmbeddingProvider>>>>,
     pub doc_processor_url: String,
 }

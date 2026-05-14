@@ -292,7 +292,7 @@ async fn upload_document(
     let pool = state.pool.clone();
     let storage = state.storage.clone();
     let doc_processor_url = state.doc_processor_url.clone();
-    let embedding_provider = state.embedding_provider.clone();
+    let embedding_provider = state.embedding_provider.read().await.clone();
     tokio::spawn(async move {
         crate::services::document::process_document(
             pool,
@@ -435,7 +435,7 @@ async fn reprocess_document(
     let pool = state.pool.clone();
     let storage = state.storage.clone();
     let doc_processor_url = state.doc_processor_url.clone();
-    let embedding_provider = state.embedding_provider.clone();
+    let embedding_provider = state.embedding_provider.read().await.clone();
     tokio::spawn(async move {
         crate::services::document::process_document(
             pool,

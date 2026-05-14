@@ -334,7 +334,7 @@ async fn send_message(
         ..RagConfig::default()
     };
 
-    let embedding_provider = state.embedding_provider.clone();
+    let embedding_provider = state.embedding_provider.read().await.clone();
 
     if req.stream {
         // Return SSE stream
