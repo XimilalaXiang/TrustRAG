@@ -1,4 +1,4 @@
-use axum::{Router, routing::get};
+use axum::{extract::DefaultBodyLimit, Router, routing::get};
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -7,9 +7,11 @@ mod error;
 mod auth;
 mod api;
 mod db;
+mod services;
 
 use api::AppState;
 use auth::middleware::JwtSecret;
+use services::storage::StorageService;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -24,17 +26,26 @@ async fn main() -> anyhow::Result<()> {
 
     sqlx::migrate!("./migrations").run(&pool).await?;
 
+    let storage = StorageService::new(&config)?;
+    tracing::info!("Storage service initialized (bucket: {})", storage.bucket());
+
+    let upload_limit = config.max_upload_size_mb * 1024 * 1024;
+
     let state = AppState {
         pool: pool.clone(),
         jwt_secret: config.jwt_secret.clone(),
+        storage,
+        max_upload_size: config.max_upload_size_mb,
     };
 
     let app = Router::new()
         .route("/health", get(|| async { "ok" }))
         .merge(api::users::router())
         .merge(api::workspaces::router())
+        .merge(api::documents::router())
         .with_state(state)
         .layer(axum::Extension(JwtSecret(config.jwt_secret.clone())))
+        .layer(DefaultBodyLimit::max(upload_limit as usize))
         .layer(CorsLayer::permissive())
         .layer(TraceLayer::new_for_http());
 

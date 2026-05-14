@@ -1,6 +1,5 @@
 use axum::{extract::State, routing::{get, post, put}, Json, Router};
 use serde::{Deserialize, Serialize};
-use sqlx::PgPool;
 use uuid::Uuid;
 
 use argon2::{

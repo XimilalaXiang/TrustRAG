@@ -4,7 +4,7 @@ use axum::{
 };
 use uuid::Uuid;
 
-use crate::auth::jwt::{verify_token, Claims};
+use crate::auth::jwt::verify_token;
 use crate::error::AppError;
 
 #[derive(Debug, Clone)]

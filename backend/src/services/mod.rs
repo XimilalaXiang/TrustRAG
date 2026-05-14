@@ -4,3 +4,4 @@ pub mod llm;
 pub mod embedding;
 pub mod search;
 pub mod review;
+pub mod storage;

@@ -320,8 +320,12 @@
 
 ## 自动化开发规则
 
-1. **完成一个任务后**：
+1. **完成一个小功能后**（每个 ✅ 任务项）：
+   - 编写对应的测试代码
+   - 运行测试验证通过
    - 标记为 ✅
+   - `git add -A && git commit` 提交代码
+   - `git push origin master` 推送到 GitHub
    - 查阅下一个任务的参考文档
    - 自动进入下一个任务
 
@@ -339,3 +343,7 @@
    - 提交当前 Sprint 的所有代码
    - 更新此 TODO 文档
    - 存储经验到 mem0
+
+5. **GitHub 仓库**：
+   - 远程仓库：https://github.com/XimilalaXiang/TrustRAG
+   - 主分支：master
