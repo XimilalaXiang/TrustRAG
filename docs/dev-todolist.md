@@ -73,14 +73,15 @@
 
 ### Sprint 2: 文档处理 + 检索（第 2-3 周）
 
-#### 🔲 2.1 Python PDF 解析 + Markdown 转换
-- [ ] PyMuPDF 文本+坐标提取
-- [ ] 标题结构提取（heading_path, section_level）
-- [ ] 页码映射（物理页码 + 逻辑页码）
-- [ ] Markdown 输出
+#### ✅ 2.1 Python PDF 解析 + Markdown 转换
+- [x] PyMuPDF 文本+坐标提取（bbox 级精度）
+- [x] 标题检测（字体大小+粗体+正则模式）
+- [x] 页码映射（物理页码 + 页面尺寸）
+- [x] Markdown 输出（heading level → # 前缀）
+- [x] 语言检测（CJK vs 英文）
+- [x] 8 个单元测试通过
 - 参考：`docs/rag-pipeline.md` → 文档摄入管线 §3-4
-- 参考：`.notes/07-component-sdk-map.md` → 文档处理层
-- 涉及文件：`doc-processor/app/processors/pdf.py`
+- 涉及文件：`doc-processor/app/processors/pdf.py`, `app/models.py`
 - 验收：上传 PDF → 返回 JSON（markdown + pages + headings + metadata）
 
 #### 🔲 2.2 Python DOCX 解析
