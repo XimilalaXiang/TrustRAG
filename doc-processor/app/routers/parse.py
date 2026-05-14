@@ -2,6 +2,7 @@ from fastapi import APIRouter, UploadFile, File, HTTPException
 
 from app.models import ParseResult
 from app.processors.pdf import parse_pdf
+from app.processors.docx import parse_docx
 
 router = APIRouter()
 
@@ -32,7 +33,19 @@ async def parse_pdf_endpoint(file: UploadFile = File(...)):
 @router.post("/docx", response_model=ParseResult)
 async def parse_docx_endpoint(file: UploadFile = File(...)):
     """Parse a DOCX file and return structured Markdown."""
-    raise HTTPException(status_code=501, detail="DOCX parsing not yet implemented")
+    if not file.filename or not file.filename.lower().endswith(".docx"):
+        raise HTTPException(status_code=400, detail="File must be a DOCX")
+
+    content = await file.read()
+    if len(content) > MAX_FILE_SIZE:
+        raise HTTPException(status_code=400, detail="File too large (max 100MB)")
+
+    try:
+        result = parse_docx(content)
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=f"Failed to parse DOCX: {e}")
+
+    return result
 
 
 @router.post("/txt", response_model=ParseResult)

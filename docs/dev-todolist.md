@@ -84,10 +84,11 @@
 - 涉及文件：`doc-processor/app/processors/pdf.py`, `app/models.py`
 - 验收：上传 PDF → 返回 JSON（markdown + pages + headings + metadata）
 
-#### 🔲 2.2 Python DOCX 解析
-- [ ] python-docx 解析
-- [ ] 标题/段落/表格提取
-- [ ] Markdown 输出
+#### ✅ 2.2 Python DOCX 解析
+- [x] python-docx 解析
+- [x] 标题/段落/表格提取
+- [x] Markdown 输出（含表格转 Markdown）
+- [x] 6 个单元测试通过
 - 参考：同 2.1
 - 涉及文件：`doc-processor/app/processors/docx.py`
 - 验收：上传 DOCX → 返回结构化 JSON
