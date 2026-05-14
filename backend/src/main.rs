@@ -8,6 +8,7 @@ mod auth;
 mod api;
 mod db;
 mod services;
+mod traits;
 
 use api::AppState;
 use auth::middleware::JwtSecret;

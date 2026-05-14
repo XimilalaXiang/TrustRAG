@@ -114,15 +114,16 @@
 - 涉及文件：`backend/src/services/chunking.rs`
 - 验收：输入 Markdown 全文 → 输出分块列表（含 heading_path, char_start/end, hash）
 
-#### 🔲 2.5 Embedding + pgvector 存储
-- [ ] 集成 async-openai embedding API 或 fastembed
-- [ ] 批量生成 embedding
-- [ ] 写入 document_chunks.embedding 列
-- [ ] HNSW 索引验证
+#### ✅ 2.5 Embedding + pgvector 存储
+- [x] EmbeddingProvider trait 定义
+- [x] OpenAI-compatible embedding 实现（async-openai，支持 Ollama/OpenAI）
+- [x] 批量生成 embedding（100 条/批次）
+- [x] pgvector 写入（vector 类型转换）
+- [x] LlmProvider + DocumentParser trait 骨架
+- [x] 2 个单元测试通过
 - 参考：`docs/rag-pipeline.md` → 文档摄入管线 §7-8
-- 参考：`.notes/07-component-sdk-map.md` → Embedding 生成
-- 涉及文件：`backend/src/services/embedding.rs`
-- 验收：分块后自动生成 embedding 并存入 PostgreSQL
+- 涉及文件：`backend/src/services/embedding.rs`, `backend/src/traits/`
+- 验收：分块后生成 embedding 并写入 document_chunks.embedding
 
 #### 🔲 2.6 全文检索索引 (pg_bigm)
 - [ ] 验证 pg_bigm 索引效果

@@ -1,1 +1,141 @@
+use async_openai::{
+    config::OpenAIConfig,
+    types::{CreateEmbeddingRequest, EmbeddingInput},
+    Client,
+};
+use async_trait::async_trait;
+use sqlx::PgPool;
+use uuid::Uuid;
 
+use crate::traits::embedding_provider::EmbeddingProvider;
+
+pub struct OpenAIEmbeddingProvider {
+    client: Client<OpenAIConfig>,
+    model: String,
+    dimensions: usize,
+}
+
+impl OpenAIEmbeddingProvider {
+    pub fn new(api_base_url: &str, api_key: Option<&str>, model: &str, dimensions: usize) -> Self {
+        let mut config = OpenAIConfig::new().with_api_base(api_base_url);
+        if let Some(key) = api_key {
+            config = config.with_api_key(key);
+        }
+
+        Self {
+            client: Client::with_config(config),
+            model: model.to_string(),
+            dimensions,
+        }
+    }
+}
+
+#[async_trait]
+impl EmbeddingProvider for OpenAIEmbeddingProvider {
+    async fn embed_texts(&self, texts: &[String]) -> anyhow::Result<Vec<Vec<f32>>> {
+        if texts.is_empty() {
+            return Ok(vec![]);
+        }
+
+        let batch_size = 100;
+        let mut all_embeddings = Vec::with_capacity(texts.len());
+
+        for batch in texts.chunks(batch_size) {
+            let input = EmbeddingInput::StringArray(batch.to_vec());
+            let request = CreateEmbeddingRequest {
+                model: self.model.clone(),
+                input,
+                encoding_format: None,
+                user: None,
+                dimensions: Some(self.dimensions as u32),
+            };
+
+            let response = self.client.embeddings().create(request).await?;
+            let mut batch_embeddings: Vec<(usize, Vec<f32>)> = response
+                .data
+                .into_iter()
+                .map(|e| (e.index as usize, e.embedding))
+                .collect();
+
+            batch_embeddings.sort_by_key(|(idx, _)| *idx);
+            all_embeddings.extend(batch_embeddings.into_iter().map(|(_, emb)| emb));
+        }
+
+        Ok(all_embeddings)
+    }
+
+    fn dimensions(&self) -> usize {
+        self.dimensions
+    }
+
+    fn model_name(&self) -> &str {
+        &self.model
+    }
+}
+
+/// Write chunk embeddings to pgvector.
+pub async fn store_chunk_embeddings(
+    pool: &PgPool,
+    chunk_ids: &[Uuid],
+    embeddings: &[Vec<f32>],
+) -> anyhow::Result<()> {
+    if chunk_ids.len() != embeddings.len() {
+        anyhow::bail!(
+            "chunk_ids ({}) and embeddings ({}) length mismatch",
+            chunk_ids.len(),
+            embeddings.len()
+        );
+    }
+
+    for (chunk_id, embedding) in chunk_ids.iter().zip(embeddings.iter()) {
+        let embedding_str = format!(
+            "[{}]",
+            embedding
+                .iter()
+                .map(|v| v.to_string())
+                .collect::<Vec<_>>()
+                .join(",")
+        );
+
+        sqlx::query(
+            "UPDATE document_chunks SET embedding = $1::vector WHERE id = $2",
+        )
+        .bind(&embedding_str)
+        .bind(chunk_id)
+        .execute(pool)
+        .await?;
+    }
+
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_embedding_str_format() {
+        let embedding = vec![0.1_f32, 0.2, 0.3];
+        let embedding_str = format!(
+            "[{}]",
+            embedding
+                .iter()
+                .map(|v| v.to_string())
+                .collect::<Vec<_>>()
+                .join(",")
+        );
+        assert_eq!(embedding_str, "[0.1,0.2,0.3]");
+    }
+
+    #[test]
+    fn test_provider_new() {
+        let provider = OpenAIEmbeddingProvider::new(
+            "http://localhost:11434/v1",
+            None,
+            "nomic-embed-text",
+            768,
+        );
+        assert_eq!(provider.dimensions(), 768);
+        assert_eq!(provider.model_name(), "nomic-embed-text");
+    }
+}
