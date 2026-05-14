@@ -69,9 +69,7 @@ class _ModelConfigPageState extends ConsumerState<ModelConfigPage> {
                         ? Colors.green.shade100
                         : Colors.grey.shade100,
                     child: Icon(
-                      cfg.modelType == 'embedding'
-                          ? Icons.data_array
-                          : Icons.smart_toy,
+                      Icons.smart_toy,
                       color: cfg.isDefault ? Colors.green : Colors.grey,
                     ),
                   ),
@@ -98,7 +96,7 @@ class _ModelConfigPageState extends ConsumerState<ModelConfigPage> {
                     ],
                   ),
                   subtitle: Text(
-                      '${cfg.provider} · ${cfg.apiEndpoint} · ${cfg.modelType}'),
+                      '${cfg.provider} · ${cfg.apiBaseUrl}'),
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -181,9 +179,9 @@ class _ModelConfigPageState extends ConsumerState<ModelConfigPage> {
     String selectedProvider = config?.provider ?? 'openai';
     final modelCtl = TextEditingController(text: config?.modelName ?? '');
     final endpointCtl =
-        TextEditingController(text: config?.apiEndpoint ?? '');
+        TextEditingController(text: config?.apiBaseUrl ?? '');
     final apiKeyCtl = TextEditingController();
-    String modelType = config?.modelType ?? 'llm';
+    String modelType = 'llm';
     bool isDefault = config?.isDefault ?? false;
 
     showDialog(
@@ -268,10 +266,10 @@ class _ModelConfigPageState extends ConsumerState<ModelConfigPage> {
             FilledButton(
               onPressed: () async {
                 final data = <String, dynamic>{
+                  'name': '${modelCtl.text} ($selectedProvider)',
                   'provider': selectedProvider,
                   'model_name': modelCtl.text,
-                  'api_endpoint': endpointCtl.text,
-                  'model_type': modelType,
+                  'api_base_url': endpointCtl.text,
                   'is_default': isDefault,
                 };
                 if (apiKeyCtl.text.isNotEmpty) {

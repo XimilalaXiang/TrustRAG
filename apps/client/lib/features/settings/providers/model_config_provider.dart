@@ -4,28 +4,31 @@ import '../../auth/providers/auth_provider.dart';
 
 class ModelConfig {
   final String id;
+  final String name;
   final String provider;
   final String modelName;
-  final String apiEndpoint;
-  final String modelType;
+  final String apiBaseUrl;
+  final bool hasApiKey;
   final bool isDefault;
 
   ModelConfig({
     required this.id,
+    required this.name,
     required this.provider,
     required this.modelName,
-    required this.apiEndpoint,
-    required this.modelType,
+    required this.apiBaseUrl,
+    required this.hasApiKey,
     required this.isDefault,
   });
 
   factory ModelConfig.fromJson(Map<String, dynamic> json) {
     return ModelConfig(
       id: json['id'],
+      name: json['name'] ?? '',
       provider: json['provider'],
       modelName: json['model_name'],
-      apiEndpoint: json['api_endpoint'],
-      modelType: json['model_type'] ?? 'llm',
+      apiBaseUrl: json['api_base_url'] ?? '',
+      hasApiKey: json['has_api_key'] ?? false,
       isDefault: json['is_default'] ?? false,
     );
   }
