@@ -260,44 +260,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                             style: TextStyle(color: Colors.grey.shade500)),
                       );
                     }
-                    return ListView.builder(
-                      itemCount: list.length,
-                      itemBuilder: (context, i) {
-                        final conv = list[i];
-                        final isSelected = selectedConv?.id == conv.id;
-                        return ListTile(
-                          selected: isSelected,
-                          selectedTileColor: Theme.of(context)
-                              .colorScheme
-                              .primaryContainer
-                              .withValues(alpha: 0.3),
-                          leading: const Icon(Icons.chat_bubble_outline,
-                              size: 18),
-                          title: Text(
-                            conv.title ?? '对话',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          onTap: () => _selectConversation(conv),
-                          trailing: IconButton(
-                            icon: const Icon(Icons.delete_outline, size: 16),
-                            onPressed: () {
-                              ref
-                                  .read(conversationProvider.notifier)
-                                  .deleteConversation(ws.id, conv.id);
-                              if (selectedConv?.id == conv.id) {
-                                ref
-                                    .read(
-                                        selectedConversationProvider.notifier)
-                                    .state = null;
-                                ref.read(messagesProvider.notifier).state =
-                                    [];
-                              }
-                            },
-                          ),
-                        );
-                      },
-                    );
+                    return _buildGroupedConversationList(list, ws, selectedConv);
                   },
                 ),
               ),
@@ -318,6 +281,91 @@ class _ChatPageState extends ConsumerState<ChatPage> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildGroupedConversationList(
+      List<Conversation> list, dynamic ws, Conversation? selectedConv) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final yesterday = today.subtract(const Duration(days: 1));
+
+    final todayList = <Conversation>[];
+    final yesterdayList = <Conversation>[];
+    final earlierList = <Conversation>[];
+
+    for (final conv in list) {
+      final d = DateTime(conv.updatedAt.year, conv.updatedAt.month, conv.updatedAt.day);
+      if (d.isAtSameMomentAs(today) || d.isAfter(today)) {
+        todayList.add(conv);
+      } else if (d.isAtSameMomentAs(yesterday)) {
+        yesterdayList.add(conv);
+      } else {
+        earlierList.add(conv);
+      }
+    }
+
+    return ListView(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      children: [
+        if (todayList.isNotEmpty) ...[
+          _buildGroupHeader('今天'),
+          ...todayList.map((c) => _buildConvTile(c, ws, selectedConv)),
+        ],
+        if (yesterdayList.isNotEmpty) ...[
+          _buildGroupHeader('昨天'),
+          ...yesterdayList.map((c) => _buildConvTile(c, ws, selectedConv)),
+        ],
+        if (earlierList.isNotEmpty) ...[
+          _buildGroupHeader('更早'),
+          ...earlierList.map((c) => _buildConvTile(c, ws, selectedConv)),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildGroupHeader(String title) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+      child: Text(
+        title,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          color: Colors.grey.shade500,
+          letterSpacing: 0.5,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildConvTile(Conversation conv, dynamic ws, Conversation? selectedConv) {
+    final isSelected = selectedConv?.id == conv.id;
+    return ListTile(
+      dense: true,
+      selected: isSelected,
+      selectedTileColor: Theme.of(context)
+          .colorScheme
+          .primaryContainer
+          .withValues(alpha: 0.3),
+      leading: const Icon(Icons.chat_bubble_outline, size: 16),
+      title: Text(
+        conv.title ?? '对话',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(fontSize: 13),
+      ),
+      onTap: () => _selectConversation(conv),
+      trailing: IconButton(
+        icon: const Icon(Icons.delete_outline, size: 14),
+        onPressed: () {
+          ref.read(conversationProvider.notifier).deleteConversation(ws.id, conv.id);
+          if (selectedConv?.id == conv.id) {
+            ref.read(selectedConversationProvider.notifier).state = null;
+            ref.read(messagesProvider.notifier).state = [];
+          }
+        },
+      ),
     );
   }
 
