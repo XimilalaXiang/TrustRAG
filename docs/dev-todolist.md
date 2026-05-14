@@ -169,13 +169,14 @@
 - 涉及文件：`backend/src/api/models.rs`
 - 验收：创建/更新/删除模型配置 + 测试连接
 
-#### 🔲 3.2 LLM Provider Trait + 实现
-- [ ] 定义统一的 LLM 调用 trait
-- [ ] OpenAI-compatible 实现（async-openai）
-- [ ] 流式输出支持
+#### ✅ 3.2 LLM Provider Trait + 实现
+- [x] 定义统一的 LLM 调用 trait（LlmRequest/LlmResponse/StreamEvent）
+- [x] OpenAI-compatible 实现（reqwest + SSE 解析）
+- [x] 流式输出支持（tokio::mpsc channel + Delta/Done/Error 事件）
+- [x] 非流式输出（POST /chat/completions 完整响应）
+- [x] 4 个单元测试通过
 - 参考：`docs/rag-pipeline.md` → 阶段 7 LLM Generation
-- 参考：`.notes/07-component-sdk-map.md` → LLM 调用
-- 涉及文件：`backend/src/services/llm.rs`
+- 涉及文件：`backend/src/services/llm.rs`, `backend/src/traits/llm_provider.rs`
 - 验收：调用 LLM → 获取流式/非流式回答
 
 #### 🔲 3.3 RAG 管线核心实现
