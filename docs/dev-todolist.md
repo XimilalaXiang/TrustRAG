@@ -38,23 +38,25 @@
 - 参考：`docs/api-design.md` → §2 工作区
 - 验收：GET/POST/PUT/DELETE + 权限控制
 
-#### 🔲 1.5 MinIO + 文件上传 API
-- [ ] 初始化 opendal S3 客户端
-- [ ] 文件上传接口 (multipart/form-data)
-- [ ] 文件下载接口
+#### ✅ 1.5 MinIO + 文件上传 API
+- [x] 初始化 opendal S3 客户端
+- [x] 文件上传接口 (multipart/form-data)
+- [x] 文件下载接口
 - 参考：`docs/api-design.md` → §3 文档管理 (upload/download)
 - 参考：`docs/tech-stack.md` → opendal
 - 涉及文件：新建 `backend/src/services/storage.rs`
 - 验收：上传文件到 MinIO，返回文件路径；下载文件
 
-#### 🔲 1.6 文档元数据 CRUD API
-- [ ] 文档列表（分页 + 筛选）
-- [ ] 文档详情
-- [ ] 删除文档（级联删除分块）
-- [ ] 重新处理文档接口
+#### ✅ 1.6 文档元数据 CRUD API
+- [x] 文档列表（分页 + 筛选）
+- [x] 文档详情
+- [x] 删除文档（级联删除分块）
+- [x] 重新处理文档接口
+- [x] 分块列表接口
+- [x] Markdown 版本获取接口
 - 参考：`docs/api-design.md` → §3 文档管理
 - 涉及文件：`backend/src/api/documents.rs`
-- 验收：GET/POST/DELETE /workspaces/:ws_id/documents
+- 验收：GET/POST/DELETE /workspaces/:ws_id/documents + /chunks + /markdown
 
 #### 🔲 1.7 Docker Compose 开发环境联调
 - [ ] 验证 postgres + pgvector + pg_bigm 启动

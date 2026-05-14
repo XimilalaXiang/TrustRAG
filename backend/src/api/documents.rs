@@ -66,6 +66,14 @@ pub fn router() -> Router<AppState> {
             get(download_file),
         )
         .route(
+            "/workspaces/{ws_id}/documents/{doc_id}/markdown",
+            get(get_markdown),
+        )
+        .route(
+            "/workspaces/{ws_id}/documents/{doc_id}/chunks",
+            get(list_chunks),
+        )
+        .route(
             "/workspaces/{ws_id}/documents/{doc_id}/reprocess",
             post(reprocess_document),
         )
@@ -410,4 +418,132 @@ async fn reprocess_document(
     // TODO: trigger async document processing task
 
     Ok(Json(doc))
+}
+
+// === Chunk and Markdown endpoints ===
+
+#[derive(Serialize, sqlx::FromRow)]
+pub struct ChunkResponse {
+    pub id: Uuid,
+    pub document_id: Uuid,
+    pub chunk_index: i32,
+    pub heading_path: Option<String>,
+    pub section_level: Option<i16>,
+    pub content: String,
+    pub content_tokens: Option<i32>,
+    pub page_start: Option<i32>,
+    pub page_end: Option<i32>,
+    pub paragraph_index: Option<i32>,
+    pub char_start: Option<i64>,
+    pub char_end: Option<i64>,
+    pub content_hash: Option<String>,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Deserialize)]
+pub struct ListChunksQuery {
+    pub page: Option<i64>,
+    pub per_page: Option<i64>,
+}
+
+#[derive(Serialize)]
+pub struct PaginatedChunks {
+    pub items: Vec<ChunkResponse>,
+    pub total: i64,
+    pub page: i64,
+    pub per_page: i64,
+}
+
+async fn list_chunks(
+    auth: AuthUser,
+    State(state): State<AppState>,
+    Path((ws_id, doc_id)): Path<(Uuid, Uuid)>,
+    Query(params): Query<ListChunksQuery>,
+) -> Result<Json<PaginatedChunks>, AppError> {
+    check_workspace_access(&state.pool, ws_id, auth.id).await?;
+
+    sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(SELECT 1 FROM documents WHERE id = $1 AND workspace_id = $2)",
+    )
+    .bind(doc_id)
+    .bind(ws_id)
+    .fetch_one(&state.pool)
+    .await?
+    .then_some(())
+    .ok_or_else(|| AppError::NotFound("Document not found".into()))?;
+
+    let page = params.page.unwrap_or(1).max(1);
+    let per_page = params.per_page.unwrap_or(50).clamp(1, 200);
+    let offset = (page - 1) * per_page;
+
+    let total = sqlx::query_scalar::<_, i64>(
+        "SELECT COUNT(*) FROM document_chunks WHERE document_id = $1",
+    )
+    .bind(doc_id)
+    .fetch_one(&state.pool)
+    .await?;
+
+    let items = sqlx::query_as::<_, ChunkResponse>(
+        r#"
+        SELECT id, document_id, chunk_index, heading_path, section_level,
+               content, content_tokens, page_start, page_end,
+               paragraph_index, char_start, char_end, content_hash, created_at
+        FROM document_chunks
+        WHERE document_id = $1
+        ORDER BY chunk_index ASC
+        LIMIT $2 OFFSET $3
+        "#,
+    )
+    .bind(doc_id)
+    .bind(per_page)
+    .bind(offset)
+    .fetch_all(&state.pool)
+    .await?;
+
+    Ok(Json(PaginatedChunks {
+        items,
+        total,
+        page,
+        per_page,
+    }))
+}
+
+async fn get_markdown(
+    auth: AuthUser,
+    State(state): State<AppState>,
+    Path((ws_id, doc_id)): Path<(Uuid, Uuid)>,
+) -> Result<impl IntoResponse, AppError> {
+    check_workspace_access(&state.pool, ws_id, auth.id).await?;
+
+    let doc = sqlx::query_as::<_, (Option<String>, String)>(
+        "SELECT markdown_file_path, title FROM documents WHERE id = $1 AND workspace_id = $2",
+    )
+    .bind(doc_id)
+    .bind(ws_id)
+    .fetch_optional(&state.pool)
+    .await?
+    .ok_or_else(|| AppError::NotFound("Document not found".into()))?;
+
+    let (md_path, title) = doc;
+    let md_path = md_path.ok_or_else(|| {
+        AppError::NotFound("Markdown version not available yet (document may still be processing)".into())
+    })?;
+
+    let data = state
+        .storage
+        .download(&md_path)
+        .await
+        .map_err(|e| AppError::Internal(anyhow::anyhow!("Storage download failed: {e}")))?;
+
+    let filename = format!("{}.md", title.replace('/', "_"));
+    Ok((
+        [
+            (header::CONTENT_TYPE, "text/markdown; charset=utf-8".to_string()),
+            (
+                header::CONTENT_DISPOSITION,
+                format!("inline; filename=\"{}\"", filename),
+            ),
+        ],
+        data,
+    ))
 }
