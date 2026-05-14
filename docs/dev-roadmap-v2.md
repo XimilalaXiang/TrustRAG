@@ -147,10 +147,11 @@ TrustRAG 的差异化不在"聊天"，而在**"可信"**。三个核心差异化
 
 | # | 任务 | 优先级 | 预估 | 依赖 |
 |---|------|--------|------|------|
-| 7.1 | **审核 API 完善** | P0 | 1.5天 | 无 |
-| | - 后端 `reviews.rs` API 已有骨架，需要完善 | | | |
-| | - 审核状态: verified / uncertain / hallucination / misquote / needs_review | | | |
-| | - 审核历史追踪（reviewer_id + timestamp + comment） | | | |
+| 7.1 | ✅ **审核 API 完善** | P0 | 1.5天 | 无 |
+| | - ✅ 后端 `reviews.rs` service + API routes 完成 | | | |
+| | - ✅ 审核状态: approved / rejected / flagged / pending | | | |
+| | - ✅ 审核历史追踪（reviewer_id + timestamp + comment + corrected_text） | | | |
+| | - ✅ 对话级审核统计 API（review-stats） | | | |
 | | - 批量审核接口 | | | |
 | | - 涉及文件: `backend/src/api/reviews.rs`, `backend/src/services/review.rs` | | | |
 | | - 验收: 对引用进行逐条审核 + 查看审核历史 | | | |
