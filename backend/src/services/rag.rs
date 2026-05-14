@@ -386,8 +386,8 @@ pub async fn run_rag_pipeline(
         let messages = build_chitchat_prompt(query, history);
         let llm_req = LlmRequest {
             messages,
-            temperature: 0.7,
-            max_tokens: 256,
+            temperature: config.temperature.max(0.5),
+            max_tokens: config.max_tokens,
             stream: false,
         };
         let resp = llm_provider.generate(&llm_req).await?;
@@ -482,8 +482,8 @@ pub async fn run_rag_pipeline_stream(
         let messages = build_chitchat_prompt(query, history);
         let llm_req = LlmRequest {
             messages,
-            temperature: 0.7,
-            max_tokens: 256,
+            temperature: config.temperature.max(0.5),
+            max_tokens: config.max_tokens,
             stream: true,
         };
         llm_provider.stream(&llm_req, tx).await?;
@@ -709,7 +709,10 @@ pub async fn generate_follow_up_questions(
         Answer (abbreviated): {abbreviated}\n\n\
         JSON array:",
         query = query,
-        abbreviated = if answer.len() > 500 { &answer[..500] } else { answer },
+        abbreviated = {
+            let truncated: String = answer.chars().take(500).collect();
+            truncated
+        },
     );
 
     let req = LlmRequest {

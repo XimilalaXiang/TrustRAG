@@ -607,8 +607,8 @@ fn build_sse_stream(
             let llm = llm_provider.clone();
             let llm_req = crate::traits::llm_provider::LlmRequest {
                 messages,
-                temperature: 0.7,
-                max_tokens: 256,
+                temperature: rag_config.temperature.max(0.5),
+                max_tokens: rag_config.max_tokens,
                 stream: true,
             };
 
