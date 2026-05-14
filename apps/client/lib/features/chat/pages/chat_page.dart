@@ -103,24 +103,38 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       }
 
       String assistantId = '';
+      String currentEventType = '';
 
       await for (final chunk
           in response.stream.transform(utf8.decoder)) {
         for (final line in chunk.split('\n')) {
-          if (!line.startsWith('data: ')) continue;
-          final jsonStr = line.substring(6).trim();
+          final trimmed = line.trim();
+          if (trimmed.isEmpty) {
+            currentEventType = '';
+            continue;
+          }
+          if (trimmed.startsWith('event: ')) {
+            currentEventType = trimmed.substring(7).trim();
+            continue;
+          }
+          if (!trimmed.startsWith('data: ')) continue;
+          final jsonStr = trimmed.substring(5).trim();
           if (jsonStr.isEmpty) continue;
           try {
+            final eventType = currentEventType.isNotEmpty
+                ? currentEventType
+                : (jsonDecode(jsonStr) is Map
+                    ? (jsonDecode(jsonStr)['type'] ?? '')
+                    : '');
             final event = jsonDecode(jsonStr);
-            final type = event['type'];
-            if (type == 'message_start') {
+            if (eventType == 'message_start') {
               assistantId = event['message_id'] ?? '';
-            } else if (type == 'text_delta') {
+            } else if (eventType == 'text_delta') {
               setState(() {
-                _streamingContent += event['text'] ?? '';
+                _streamingContent += event['delta'] ?? event['text'] ?? '';
               });
               _scrollToBottom();
-            } else if (type == 'message_end') {
+            } else if (eventType == 'message_end') {
               final fullContent = _streamingContent;
               final aiMsg = ChatMessage(
                 id: assistantId,
@@ -135,6 +149,12 @@ class _ChatPageState extends ConsumerState<ChatPage> {
               setState(() {
                 _streamingContent = '';
               });
+            } else if (eventType == 'error') {
+              final errMsg = event is String ? event : (event['message'] ?? event.toString());
+              if (mounted) {
+                ScaffoldMessenger.of(context)
+                    .showSnackBar(SnackBar(content: Text('AI 错误: $errMsg')));
+              }
             }
           } catch (_) {}
         }
