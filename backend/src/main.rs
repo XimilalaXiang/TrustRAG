@@ -138,6 +138,7 @@ async fn main() -> anyhow::Result<()> {
         .merge(api::chat::router())
         .merge(api::citations::router())
         .merge(api::reviews::router())
+        .merge(api::knowledge_graph::router())
         .with_state(state)
         .layer(axum::Extension(JwtSecret(config.jwt_secret.clone())))
         .layer(DefaultBodyLimit::max(upload_limit as usize))
