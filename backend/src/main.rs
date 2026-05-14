@@ -7,7 +7,9 @@ mod error;
 mod auth;
 mod api;
 mod db;
-mod services;
+
+use api::AppState;
+use auth::middleware::JwtSecret;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -22,8 +24,17 @@ async fn main() -> anyhow::Result<()> {
 
     sqlx::migrate!("./migrations").run(&pool).await?;
 
+    let state = AppState {
+        pool: pool.clone(),
+        jwt_secret: config.jwt_secret.clone(),
+    };
+
     let app = Router::new()
         .route("/health", get(|| async { "ok" }))
+        .merge(api::users::router())
+        .merge(api::workspaces::router())
+        .with_state(state)
+        .layer(axum::Extension(JwtSecret(config.jwt_secret.clone())))
         .layer(CorsLayer::permissive())
         .layer(TraceLayer::new_for_http());
 
