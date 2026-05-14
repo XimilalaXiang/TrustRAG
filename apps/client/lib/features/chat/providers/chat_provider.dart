@@ -1,0 +1,113 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../auth/providers/auth_provider.dart';
+
+class Conversation {
+  final String id;
+  final String workspaceId;
+  final String? title;
+  final DateTime updatedAt;
+
+  Conversation({
+    required this.id,
+    required this.workspaceId,
+    this.title,
+    required this.updatedAt,
+  });
+
+  factory Conversation.fromJson(Map<String, dynamic> json) {
+    return Conversation(
+      id: json['id'],
+      workspaceId: json['workspace_id'],
+      title: json['title'],
+      updatedAt: DateTime.parse(json['updated_at']),
+    );
+  }
+}
+
+class ChatMessage {
+  final String id;
+  final String role;
+  final String content;
+  final String? modelName;
+  final DateTime createdAt;
+
+  ChatMessage({
+    required this.id,
+    required this.role,
+    required this.content,
+    this.modelName,
+    required this.createdAt,
+  });
+
+  factory ChatMessage.fromJson(Map<String, dynamic> json) {
+    return ChatMessage(
+      id: json['id'],
+      role: json['role'],
+      content: json['content'],
+      modelName: json['model_name'],
+      createdAt: DateTime.parse(json['created_at']),
+    );
+  }
+}
+
+class ConversationNotifier
+    extends StateNotifier<AsyncValue<List<Conversation>>> {
+  final Ref ref;
+
+  ConversationNotifier(this.ref) : super(const AsyncValue.data([]));
+
+  Future<void> loadConversations(String workspaceId) async {
+    state = const AsyncValue.loading();
+    try {
+      final api = ref.read(apiClientProvider);
+      final resp =
+          await api.dio.get('/workspaces/$workspaceId/conversations');
+      final list = (resp.data as List)
+          .map((j) => Conversation.fromJson(j))
+          .toList();
+      state = AsyncValue.data(list);
+    } catch (e, st) {
+      state = AsyncValue.error(e, st);
+    }
+  }
+
+  Future<Conversation?> createConversation(
+      String workspaceId, String? title) async {
+    try {
+      final api = ref.read(apiClientProvider);
+      final resp = await api.dio.post(
+        '/workspaces/$workspaceId/conversations',
+        data: {'title': title ?? '新对话'},
+      );
+      final conv = Conversation.fromJson(resp.data);
+      state = AsyncValue.data([conv, ...state.value ?? []]);
+      return conv;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> deleteConversation(
+      String workspaceId, String convId) async {
+    try {
+      final api = ref.read(apiClientProvider);
+      await api.dio
+          .delete('/workspaces/$workspaceId/conversations/$convId');
+      state = AsyncValue.data(
+        (state.value ?? []).where((c) => c.id != convId).toList(),
+      );
+    } catch (_) {}
+  }
+}
+
+final conversationProvider = StateNotifierProvider<ConversationNotifier,
+    AsyncValue<List<Conversation>>>((ref) {
+  return ConversationNotifier(ref);
+});
+
+final selectedConversationProvider =
+    StateProvider<Conversation?>((ref) => null);
+
+final messagesProvider =
+    StateProvider<List<ChatMessage>>((ref) => []);

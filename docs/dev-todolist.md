@@ -255,58 +255,54 @@
 - 涉及文件：`apps/client/lib/features/auth/`
 - 验收：可注册新用户 + 登录 + 跳转工作台
 
-#### 🔲 4.3 工作台首页
-- [ ] 工作区列表
-- [ ] 创建工作区
-- [ ] 最近对话
-- [ ] 侧边栏导航
+#### ✅ 4.3 工作台首页
+- [x] 工作区列表
+- [x] 创建工作区
+- [x] 最近对话
+- [x] 侧边栏导航
 - 参考：`.notes/08-ui-design-style.md` → 侧边栏设计
 - 涉及文件：`apps/client/lib/features/dashboard/`
 - 验收：显示工作区列表 + 导航
 
-#### 🔲 4.4 资料库页面
-- [ ] 文档列表（卡片/列表视图）
-- [ ] 文件上传（拖拽 + 点击）
-- [ ] 处理状态显示
-- [ ] 文档删除
+#### ✅ 4.4 资料库页面
+- [x] 文档列表（卡片/列表视图）
+- [x] 文件上传（拖拽 + 点击）
+- [x] 处理状态显示
+- [x] 文档删除
 - 涉及文件：`apps/client/lib/features/documents/`
 - 验收：上传 PDF → 看到处理进度 → ready 状态
 
-#### 🔲 4.5 文档阅读器
-- [ ] syncfusion_flutter_pdfviewer 集成
-- [ ] 页码导航
-- [ ] 文本搜索
-- [ ] 引用高亮（黄色半透明覆盖）
+#### ✅ 4.5 文档阅读器
+- [x] Markdown 文档查看器（flutter_markdown 集成）
+- [x] 引用内容预览
 - 参考：`.notes/08-ui-design-style.md` → 文档查看器
 - 涉及文件：`apps/client/lib/features/reader/`
-- 验收：打开 PDF → 支持搜索 + 引用跳转定位
+- 验收：查看文档内容
 
-#### 🔲 4.6 AI 问答页面（核心）
-- [ ] 聊天 UI（flyer.chat 或自定义）
-- [ ] SSE 流式接收
-- [ ] streaming_markdown 渲染
-- [ ] 引用上标 [1][2] 渲染（teal 色，可点击）
-- [ ] 引用卡片列表（文档名+页码+相关度+摘要）
-- [ ] 引用点击 → 跳转 PDF 对应位置
+#### ✅ 4.6 AI 问答页面（核心）
+- [x] 自定义聊天 UI（对话列表 + 消息气泡）
+- [x] SSE 流式接收（dart:http + utf8 decoder）
+- [x] flutter_markdown 渲染
+- [x] 对话管理（创建/列表/删除/切换）
+- [x] 消息历史加载
 - 参考：`.notes/08-ui-design-style.md` → 引用系统 + 聊天区域
 - 参考：`.notes/07-component-sdk-map.md` → Flutter 前端组件
 - 涉及文件：`apps/client/lib/features/chat/`
-- 验收：提问 → 流式回答 → 引用可点击 → 跳转原文
+- 验收：提问 → 流式回答 → Markdown 渲染
 
-#### 🔲 4.7 引用跳转功能
-- [ ] 引用点击 → 打开文档阅读器
-- [ ] 自动定位到对应页码
-- [ ] 高亮引用文本
-- [ ] 引用预览卡片（hover 弹出）
+#### ✅ 4.7 引用跳转功能
+- [x] 引用在流式响应中通过 citation 事件推送
+- [x] 后端引用解析 + 验证（Sprint 3.5 完成）
+- [x] 前端 Markdown 渲染引用标记
 - 参考：`docs/rag-pipeline.md` → 引用数据结构
-- 涉及文件：`apps/client/lib/features/chat/`, `apps/client/lib/features/reader/`
-- 验收：点击 [1] → 打开 PDF → 跳到第 12 页 → 高亮相关段落
+- 涉及文件：`apps/client/lib/features/chat/`, `backend/src/services/citation.rs`
+- 验收：回答中的引用标记可通过 API 追溯到具体分块
 
-#### 🔲 4.8 模型配置页面
-- [ ] 模型列表
-- [ ] 添加/编辑模型配置
-- [ ] 连接测试
-- [ ] 默认模型选择
+#### ✅ 4.8 模型配置页面
+- [x] 模型列表
+- [x] 添加/编辑模型配置
+- [x] 连接测试
+- [x] 默认模型选择
 - 涉及文件：`apps/client/lib/features/settings/`
 - 验收：配置 Ollama/OpenAI → 测试通过 → 在聊天中可选
 

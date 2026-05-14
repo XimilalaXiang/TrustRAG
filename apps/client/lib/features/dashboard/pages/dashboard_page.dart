@@ -3,6 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../auth/providers/auth_provider.dart';
+import '../../chat/pages/chat_page.dart';
+import '../../documents/pages/documents_page.dart';
+import '../../settings/pages/model_config_page.dart';
 import '../providers/workspace_provider.dart';
 
 class DashboardPage extends ConsumerStatefulWidget {
@@ -120,95 +123,11 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
   }
 
   Widget _buildChatView() {
-    final selectedWs = ref.watch(selectedWorkspaceProvider);
-
-    return Column(
-      children: [
-        _buildHeader(
-          '对话',
-          subtitle: selectedWs != null ? selectedWs.name : '请先选择工作区',
-        ),
-        Expanded(
-          child: Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.chat_bubble_outline,
-                    size: 80, color: Colors.grey.shade300),
-                const SizedBox(height: 16),
-                Text(
-                  selectedWs != null ? '开始一个新对话' : '请先选择或创建一个工作区',
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        color: Colors.grey,
-                      ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  '上传文档后，向 AI 提问，获得带引用的可靠回答',
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        color: Colors.grey.shade500,
-                      ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
+    return const ChatPage();
   }
 
   Widget _buildDocumentsView() {
-    final selectedWs = ref.watch(selectedWorkspaceProvider);
-
-    return Column(
-      children: [
-        _buildHeader(
-          '资料库',
-          subtitle: selectedWs?.name ?? '请先选择工作区',
-          actions: [
-            if (selectedWs != null)
-              FilledButton.icon(
-                onPressed: () {
-                  // TODO: implement file upload
-                },
-                icon: const Icon(Icons.upload_file, size: 18),
-                label: const Text('上传文档'),
-              ),
-          ],
-        ),
-        Expanded(
-          child: selectedWs == null
-              ? Center(
-                  child: Text('请先在"工作区"标签中选择或创建一个工作区',
-                      style: TextStyle(color: Colors.grey.shade500)),
-                )
-              : Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.upload_file,
-                          size: 80, color: Colors.grey.shade300),
-                      const SizedBox(height: 16),
-                      Text(
-                        '暂无文档',
-                        style:
-                            Theme.of(context).textTheme.headlineSmall?.copyWith(
-                                  color: Colors.grey,
-                                ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        '点击"上传文档"添加 PDF 或 DOCX 文件',
-                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                              color: Colors.grey.shade500,
-                            ),
-                      ),
-                    ],
-                  ),
-                ),
-        ),
-      ],
-    );
+    return const DocumentsPage();
   }
 
   Widget _buildWorkspacesView() {
@@ -319,7 +238,10 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                   subtitle: const Text('管理 LLM 和 Embedding 模型'),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () {
-                    // TODO: navigate to model settings
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                          builder: (_) => const ModelConfigPage()),
+                    );
                   },
                 ),
               ),

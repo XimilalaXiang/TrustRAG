@@ -25,6 +25,9 @@ dependencies:
   # Storage
   shared_preferences: ^2.5.3
 
+  # HTTP SSE streaming
+  http: ^1.3.0
+
   # UI
   google_fonts: ^6.2.1
   flutter_markdown: ^0.7.7
