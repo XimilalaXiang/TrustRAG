@@ -2,11 +2,12 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:flutter_markdown/flutter_markdown.dart' show MarkdownBody, MarkdownStyleSheet;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:streaming_markdown/streaming_markdown.dart';
+import 'package:streaming_markdown/streaming_markdown.dart' hide MarkdownStyleSheet;
 
 import '../../auth/providers/auth_provider.dart';
 import '../../dashboard/providers/workspace_provider.dart';
@@ -412,51 +413,67 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   }
 
   Widget _buildMessageList(List<ChatMessage> messages) {
-    return ListView.builder(
-      controller: _scrollController,
-      padding: const EdgeInsets.all(16),
-      itemCount: messages.length + (_streamingContent.isNotEmpty ? 1 : 0),
-      itemBuilder: (context, i) {
-        if (i < messages.length) {
-          return _buildMessageBubble(messages[i]);
-        }
-        return _buildStreamingBubble();
-      },
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 720),
+        child: ListView.builder(
+          controller: _scrollController,
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+          itemCount: messages.length + (_streamingContent.isNotEmpty ? 1 : 0),
+          itemBuilder: (context, i) {
+            if (i < messages.length) {
+              return _buildMessageBubble(messages[i]);
+            }
+            return _buildStreamingBubble();
+          },
+        ),
+      ),
     );
   }
 
   Widget _buildMessageBubble(ChatMessage msg) {
     final isUser = msg.role == 'user';
-    return Align(
-      alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        constraints:
-            BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.65),
-        margin: const EdgeInsets.symmetric(vertical: 6),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: isUser
-                    ? Theme.of(context).colorScheme.primaryContainer
-                    : Theme.of(context).colorScheme.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: isUser
-                  ? Text(msg.content)
-                  : MarkdownBody(
-                      data: msg.content,
-                      selectable: true,
-                    ),
-            ),
-            if (!isUser && msg.citations.isNotEmpty)
-              _buildCitationCards(msg.citations),
-            if (!isUser && msg.suggestions.isNotEmpty)
-              _buildSuggestionPills(msg.suggestions),
-          ],
+    final theme = Theme.of(context);
+
+    if (isUser) {
+      return Align(
+        alignment: Alignment.centerRight,
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 560),
+          margin: const EdgeInsets.symmetric(vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Text(msg.content, style: theme.textTheme.bodyLarge),
         ),
+      );
+    }
+
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          MarkdownBody(
+            data: msg.content,
+            selectable: true,
+            styleSheet: MarkdownStyleSheet(
+              p: theme.textTheme.bodyLarge,
+              h1: theme.textTheme.headlineMedium,
+              h2: theme.textTheme.titleLarge,
+              code: GoogleFonts.jetBrainsMono(fontSize: 14, height: 1.5),
+              codeblockDecoration: BoxDecoration(
+                color: theme.colorScheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: theme.colorScheme.outline),
+              ),
+            ),
+          ),
+          if (msg.citations.isNotEmpty) _buildCitationCards(msg.citations),
+          if (msg.suggestions.isNotEmpty) _buildSuggestionPills(msg.suggestions),
+        ],
       ),
     );
   }
@@ -609,55 +626,45 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   }
 
   Widget _buildStreamingBubble() {
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Container(
-        constraints:
-            BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.65),
-        margin: const EdgeInsets.symmetric(vertical: 6),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(16),
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (_streamingContent.isEmpty)
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text('思考中...',
+                    style: TextStyle(color: Colors.grey.shade500)),
+              ],
+            )
+          else if (_streamingTextController != null)
+            AnimatedMarkdown(
+              stream: _streamingTextController!.stream,
+              config: const AnimationConfig(
+                mode: AnimationMode.token,
+                chunkSize: 3,
               ),
-              child: _streamingContent.isEmpty
-                  ? Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Theme.of(context).colorScheme.primary,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Text('思考中...', style: TextStyle(color: Colors.grey.shade500)),
-                      ],
-                    )
-                  : _streamingTextController != null
-                      ? AnimatedMarkdown(
-                          stream: _streamingTextController!.stream,
-                          config: const AnimationConfig(
-                            mode: AnimationMode.token,
-                            chunkSize: 3,
-                          ),
-                          selectable: true,
-                        )
-                      : MarkdownBody(
-                          data: _streamingContent,
-                          selectable: true,
-                        ),
+              selectable: true,
+            )
+          else
+            MarkdownBody(
+              data: _streamingContent,
+              selectable: true,
             ),
-            if (_streamingCitations.isNotEmpty)
-              _buildCitationCards(_streamingCitations),
-          ],
-        ),
+          if (_streamingCitations.isNotEmpty)
+            _buildCitationCards(_streamingCitations),
+        ],
       ),
     );
   }
@@ -666,10 +673,14 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        border:
-            Border(top: BorderSide(color: Colors.grey.shade200, width: 1)),
+        border: Border(
+            top: BorderSide(
+                color: Theme.of(context).colorScheme.outline, width: 1)),
       ),
-      child: Row(
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 720),
+          child: Row(
         children: [
           Expanded(
             child: TextField(
@@ -702,6 +713,8 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                 : const Icon(Icons.send),
           ),
         ],
+      ),
+      ),
       ),
     );
   }
