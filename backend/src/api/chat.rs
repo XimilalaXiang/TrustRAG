@@ -434,15 +434,14 @@ fn build_sse_stream(
         }).unwrap_or_default();
         yield Ok(Event::default().event("message_start").data(start_data));
 
-        let Some(emb_provider) = embedding_provider else {
-            yield Ok(Event::default().event("error").data("Embedding provider not configured"));
-            return;
-        };
-
-        // Run retrieval first
         let analysis = rag::analyze_query(&query, &history);
 
         let sources: Vec<AssembledSource> = if analysis.needs_retrieval {
+            let Some(emb_provider) = embedding_provider else {
+                yield Ok(Event::default().event("error").data("Embedding provider not configured. Please configure an embedding model."));
+                return;
+            };
+
             let search_config = crate::services::search::SearchConfig {
                 mode: rag_config.search_mode.clone(),
                 top_k: rag_config.search_top_k,
