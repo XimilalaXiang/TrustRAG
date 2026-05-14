@@ -158,10 +158,13 @@
 
 ### Sprint 3: RAG 问答 + 引用（第 3-4 周）
 
-#### 🔲 3.1 模型配置 CRUD API
-- [ ] 模型配置表 CRUD
-- [ ] 连接测试接口
-- [ ] API Key 加密存储
+#### ✅ 3.1 模型配置 CRUD API
+- [x] 模型配置表 CRUD（GET/POST/PUT/DELETE /model-configs）
+- [x] 连接测试接口（POST /model-configs/:id/test）
+- [x] API Key XOR 加密存储（api_key_enc）
+- [x] 默认模型管理（自动清除其他默认）
+- [x] Provider 校验（openai/anthropic/ollama/custom）
+- [x] 5 个单元测试通过
 - 参考：`docs/api-design.md` → §6 模型配置
 - 涉及文件：`backend/src/api/models.rs`
 - 验收：创建/更新/删除模型配置 + 测试连接
