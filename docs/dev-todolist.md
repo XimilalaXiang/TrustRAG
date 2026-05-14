@@ -240,19 +240,18 @@
 - 涉及文件：`apps/client/`
 - 验收：Flutter Web 项目可运行，有基础主题
 
-#### 🔲 4.1 HTTP 客户端 + 认证层
-- [ ] dio 配置（baseURL, interceptor）
-- [ ] JWT token 管理（存储/刷新/过期处理）
-- [ ] AuthProvider（Riverpod）
-- 涉及文件：`apps/client/lib/core/api/`, `apps/client/lib/core/auth/`
+#### ✅ 4.1 HTTP 客户端 + 认证层
+- [x] dio 配置（baseURL, interceptor, JWT auto-attach）
+- [x] JWT token 管理（SharedPreferences 持久化/清除/401 处理）
+- [x] AuthProvider（Riverpod StateNotifier）
+- 涉及文件：`apps/client/lib/core/api/`, `apps/client/lib/features/auth/providers/`
 - 验收：登录后自动附加 token，过期自动跳转登录
 
-#### 🔲 4.2 登录/注册页面
-- [ ] 登录表单
-- [ ] 注册表单
-- [ ] 表单验证
-- [ ] 错误提示
-- 参考：`.notes/08-ui-design-style.md` → 色彩/排版
+#### ✅ 4.2 登录/注册页面
+- [x] 登录表单（邮箱+密码+记住密码）
+- [x] 注册表单（用户名+邮箱+密码+确认密码）
+- [x] 表单验证
+- [x] 错误提示（API 错误展示）
 - 涉及文件：`apps/client/lib/features/auth/`
 - 验收：可注册新用户 + 登录 + 跳转工作台
 
