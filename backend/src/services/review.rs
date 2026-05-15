@@ -49,11 +49,11 @@ pub async fn create_review(
         anyhow::bail!("Invalid review status: {}", input.status);
     }
 
-    let row = sqlx::query_as::<_, ReviewRow>(
+    let new_id: String = sqlx::query_scalar(
         r#"
         INSERT INTO review_records (citation_id, reviewer_id, status, comment, corrected_text)
         VALUES ($1, $2, $3, $4, $5)
-        RETURNING id, citation_id, reviewer_id, status, comment, corrected_text, CAST(created_at AS TEXT), CAST(updated_at AS TEXT)
+        RETURNING id
         "#,
     )
     .bind(citation_id.to_string())
@@ -61,6 +61,13 @@ pub async fn create_review(
     .bind(&input.status)
     .bind(&input.comment)
     .bind(&input.corrected_text)
+    .fetch_one(pool)
+    .await?;
+
+    let row = sqlx::query_as::<_, ReviewRow>(
+        "SELECT id, citation_id, reviewer_id, status, comment, corrected_text, CAST(created_at AS TEXT), CAST(updated_at AS TEXT) FROM review_records WHERE id = $1",
+    )
+    .bind(&new_id)
     .fetch_one(pool)
     .await?;
     let record = parse_review_row(row);

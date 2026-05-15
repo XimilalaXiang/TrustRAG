@@ -33,7 +33,16 @@ async fn create_review(
         status = %input.status,
         "Creating citation review"
     );
-    let record = review::create_review(&state.pool, citation_id, auth.id, &input).await?;
+    let record = review::create_review(&state.pool, citation_id, auth.id, &input)
+        .await
+        .map_err(|e| {
+            tracing::error!(
+                citation_id = %citation_id,
+                error = %e,
+                "Failed to create review"
+            );
+            e
+        })?;
     Ok(Json(record))
 }
 
