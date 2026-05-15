@@ -41,7 +41,7 @@ pub async fn create_review(
         RETURNING id, citation_id, reviewer_id, status, comment, corrected_text, created_at, updated_at
         "#,
     )
-    .bind(citation_id)
+    .bind(citation_id.to_string())
     .bind(reviewer_id)
     .bind(&input.status)
     .bind(&input.comment)
@@ -51,12 +51,12 @@ pub async fn create_review(
 
     if input.status == "approved" {
         sqlx::query("UPDATE citations SET verified = true WHERE id = $1")
-            .bind(citation_id)
+            .bind(citation_id.to_string())
             .execute(pool)
             .await?;
     } else if input.status == "rejected" || input.status == "flagged" {
         sqlx::query("UPDATE citations SET verified = false WHERE id = $1")
-            .bind(citation_id)
+            .bind(citation_id.to_string())
             .execute(pool)
             .await?;
     }
@@ -76,7 +76,7 @@ pub async fn list_reviews_for_citation(
         ORDER BY created_at DESC
         "#,
     )
-    .bind(citation_id)
+    .bind(citation_id.to_string())
     .fetch_all(pool)
     .await?;
 
@@ -104,7 +104,7 @@ pub async fn get_review_stats_for_conversation(
         WHERE m.conversation_id = $1
         "#,
     )
-    .bind(conversation_id)
+    .bind(conversation_id.to_string())
     .fetch_one(pool)
     .await?;
 
@@ -121,7 +121,7 @@ pub async fn get_review_stats_for_conversation(
         GROUP BY latest.status
         "#,
     )
-    .bind(conversation_id)
+    .bind(conversation_id.to_string())
     .fetch_all(pool)
     .await?;
 

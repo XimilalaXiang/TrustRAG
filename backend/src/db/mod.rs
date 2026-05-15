@@ -1,3 +1,4 @@
+pub mod compat;
 pub mod models;
 
 #[cfg(feature = "postgres")]

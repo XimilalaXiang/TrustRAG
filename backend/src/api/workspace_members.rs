@@ -1,14 +1,14 @@
 use axum::{
     extract::{Path, State},
     http::StatusCode,
-    routing::{delete, get, post, put},
+    routing::get,
     Json, Router,
 };
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::auth::middleware::AuthUser;
+use crate::db::compat;
 use crate::error::AppError;
 
 use super::AppState;
@@ -21,18 +21,18 @@ pub fn router() -> Router<AppState> {
         )
         .route(
             "/workspaces/{ws_id}/members/{member_id}",
-            put(update_member_role).delete(remove_member),
+            axum::routing::put(update_member_role).delete(remove_member),
         )
 }
 
-#[derive(Serialize, sqlx::FromRow)]
+#[derive(Serialize)]
 struct MemberResponse {
     id: Uuid,
     workspace_id: Uuid,
     user_id: Uuid,
     display_name: String,
     role: String,
-    created_at: DateTime<Utc>,
+    created_at: String,
 }
 
 #[derive(Deserialize)]
@@ -55,8 +55,8 @@ async fn check_owner_or_editor(
         "SELECT wm.role FROM workspace_members wm
          WHERE wm.workspace_id = $1 AND wm.user_id = $2",
     )
-    .bind(ws_id)
-    .bind(user_id)
+    .bind(ws_id.to_string())
+    .bind(user_id.to_string())
     .fetch_optional(pool)
     .await?;
 
@@ -69,8 +69,8 @@ async fn check_owner_or_editor(
     let is_creator = sqlx::query_scalar::<_, bool>(
         "SELECT EXISTS(SELECT 1 FROM workspaces WHERE id = $1 AND owner_id = $2)",
     )
-    .bind(ws_id)
-    .bind(user_id)
+    .bind(ws_id.to_string())
+    .bind(user_id.to_string())
     .fetch_one(pool)
     .await?;
 
@@ -99,8 +99,8 @@ async fn check_workspace_access(
         )
         "#,
     )
-    .bind(ws_id)
-    .bind(user_id)
+    .bind(ws_id.to_string())
+    .bind(user_id.to_string())
     .fetch_one(pool)
     .await?;
 
@@ -116,16 +116,28 @@ async fn list_members(
     Path(ws_id): Path<Uuid>,
 ) -> Result<Json<Vec<MemberResponse>>, AppError> {
     check_workspace_access(&state.pool, ws_id, auth.id).await?;
-    let members = sqlx::query_as::<_, MemberResponse>(
-        "SELECT wm.id, wm.workspace_id, wm.user_id, u.display_name, wm.role, wm.created_at
+    let rows = sqlx::query_as::<_, (String, String, String, String, String, String)>(
+        "SELECT wm.id, wm.workspace_id, wm.user_id, u.display_name, wm.role, CAST(wm.created_at AS TEXT)
          FROM workspace_members wm
          JOIN users u ON wm.user_id = u.id
          WHERE wm.workspace_id = $1
          ORDER BY wm.created_at",
     )
-    .bind(ws_id)
+    .bind(ws_id.to_string())
     .fetch_all(&state.pool)
     .await?;
+
+    let mut members = Vec::with_capacity(rows.len());
+    for r in rows {
+        members.push(MemberResponse {
+            id: compat::parse_uuid(&r.0).map_err(|e| AppError::Internal(e.into()))?,
+            workspace_id: compat::parse_uuid(&r.1).map_err(|e| AppError::Internal(e.into()))?,
+            user_id: compat::parse_uuid(&r.2).map_err(|e| AppError::Internal(e.into()))?,
+            display_name: r.3,
+            role: r.4,
+            created_at: r.5,
+        });
+    }
 
     Ok(Json(members))
 }
@@ -143,13 +155,16 @@ async fn add_member(
         return Err(AppError::BadRequest("Invalid email address".into()));
     }
 
-    let target_user_id = sqlx::query_scalar::<_, Uuid>(
+    let target_user_id_str = sqlx::query_scalar::<_, String>(
         "SELECT id FROM users WHERE email = $1",
     )
     .bind(&email)
     .fetch_optional(&state.pool)
     .await?
     .ok_or_else(|| AppError::NotFound(format!("User with email '{}' not found", email)))?;
+
+    let target_user_id: Uuid = compat::parse_uuid(&target_user_id_str)
+        .map_err(|e| AppError::Internal(e.into()))?;
 
     let role = req.role.unwrap_or_else(|| "viewer".to_string());
     if !["owner", "editor", "viewer"].contains(&role.as_str()) {
@@ -164,22 +179,29 @@ async fn add_member(
         "Adding workspace member"
     );
 
-    let member = sqlx::query_as::<_, MemberResponse>(
+    let r = sqlx::query_as::<_, (String, String, String, String, String, String)>(
         "INSERT INTO workspace_members (workspace_id, user_id, role, invited_by)
          VALUES ($1, $2, $3, $4)
          ON CONFLICT (workspace_id, user_id) DO UPDATE SET role = $3
          RETURNING id, workspace_id, user_id,
                    (SELECT display_name FROM users WHERE id = workspace_members.user_id) as display_name,
-                   role, created_at",
+                   role, CAST(created_at AS TEXT)",
     )
-    .bind(ws_id)
-    .bind(target_user_id)
+    .bind(ws_id.to_string())
+    .bind(target_user_id.to_string())
     .bind(&role)
-    .bind(auth.id)
+    .bind(auth.id.to_string())
     .fetch_one(&state.pool)
     .await?;
 
-    Ok((StatusCode::CREATED, Json(member)))
+    Ok((StatusCode::CREATED, Json(MemberResponse {
+        id: compat::parse_uuid(&r.0).map_err(|e| AppError::Internal(e.into()))?,
+        workspace_id: compat::parse_uuid(&r.1).map_err(|e| AppError::Internal(e.into()))?,
+        user_id: compat::parse_uuid(&r.2).map_err(|e| AppError::Internal(e.into()))?,
+        display_name: r.3,
+        role: r.4,
+        created_at: r.5,
+    })))
 }
 
 async fn update_member_role(
@@ -198,8 +220,8 @@ async fn update_member_role(
         "UPDATE workspace_members SET role = $1 WHERE id = $2 AND workspace_id = $3",
     )
     .bind(&req.role)
-    .bind(member_id)
-    .bind(ws_id)
+    .bind(member_id.to_string())
+    .bind(ws_id.to_string())
     .execute(&state.pool)
     .await?;
 
@@ -220,8 +242,8 @@ async fn remove_member(
     let result = sqlx::query(
         "DELETE FROM workspace_members WHERE id = $1 AND workspace_id = $2",
     )
-    .bind(member_id)
-    .bind(ws_id)
+    .bind(member_id.to_string())
+    .bind(ws_id.to_string())
     .execute(&state.pool)
     .await?;
 

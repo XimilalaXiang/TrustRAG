@@ -37,7 +37,7 @@ async fn update_status(
     )
     .bind(status)
     .bind(error)
-    .bind(doc_id)
+    .bind(doc_id.to_string())
     .execute(pool)
     .await?;
     Ok(())
@@ -162,7 +162,7 @@ async fn process_document_inner(
     let doc = sqlx::query_as::<_, (String, String, String)>(
         "SELECT original_file_path, original_filename, file_type FROM documents WHERE id = $1",
     )
-    .bind(doc_id)
+    .bind(doc_id.to_string())
     .fetch_one(pool)
     .await?;
 
@@ -185,7 +185,7 @@ async fn process_document_inner(
     .bind(page_count)
     .bind(&language)
     .bind(&title)
-    .bind(doc_id)
+    .bind(doc_id.to_string())
     .execute(pool)
     .await?;
 
@@ -196,7 +196,7 @@ async fn process_document_inner(
 
     sqlx::query("UPDATE documents SET markdown_file_path = $1 WHERE id = $2")
         .bind(&md_path)
-        .bind(doc_id)
+        .bind(doc_id.to_string())
         .execute(pool)
         .await?;
 
@@ -207,7 +207,7 @@ async fn process_document_inner(
 
     // Step 6: Insert chunks into DB
     sqlx::query("DELETE FROM document_chunks WHERE document_id = $1")
-        .bind(doc_id)
+        .bind(doc_id.to_string())
         .execute(pool)
         .await?;
 
@@ -227,8 +227,8 @@ async fn process_document_inner(
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             "#,
         )
-        .bind(chunk_id)
-        .bind(doc_id)
+        .bind(chunk_id.to_string())
+        .bind(doc_id.to_string())
         .bind(chunk.index as i32)
         .bind(&chunk.heading_path)
         .bind(&chunk.content)

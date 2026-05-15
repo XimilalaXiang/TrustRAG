@@ -4,11 +4,11 @@ use axum::{
     routing::{get, post, put, delete},
     Json, Router,
 };
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::auth::middleware::AuthUser;
+use crate::db::compat;
 use crate::error::AppError;
 
 use super::AppState;
@@ -65,7 +65,7 @@ pub struct UpdateConfigRequest {
     pub is_default: Option<bool>,
 }
 
-#[derive(Serialize, sqlx::FromRow)]
+#[derive(Serialize)]
 pub struct ModelConfigResponse {
     pub id: Uuid,
     pub workspace_id: Option<Uuid>,
@@ -75,12 +75,34 @@ pub struct ModelConfigResponse {
     pub api_base_url: String,
     pub has_api_key: bool,
     pub model_name: String,
-    pub temperature: Option<f32>,
+    pub temperature: Option<f64>,
     pub max_tokens: Option<i32>,
     pub is_default: Option<bool>,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
+    pub created_at: String,
+    pub updated_at: String,
 }
+
+type ConfigRow = (String, Option<String>, String, String, String, String, Option<String>, String, Option<f64>, Option<i32>, Option<bool>, String, String);
+
+fn parse_config_row(r: ConfigRow) -> Result<ModelConfigResponse, AppError> {
+    Ok(ModelConfigResponse {
+        id: compat::parse_uuid(&r.0).map_err(|e| AppError::Internal(e.into()))?,
+        workspace_id: r.1.as_deref().and_then(|s| compat::parse_uuid(s).ok()),
+        user_id: compat::parse_uuid(&r.2).map_err(|e| AppError::Internal(e.into()))?,
+        name: r.3,
+        provider: r.4,
+        api_base_url: r.5,
+        has_api_key: r.6.is_some(),
+        model_name: r.7,
+        temperature: r.8,
+        max_tokens: r.9,
+        is_default: r.10,
+        created_at: r.11,
+        updated_at: r.12,
+    })
+}
+
+const CONFIG_SELECT: &str = "id, workspace_id, user_id, name, provider, api_base_url, api_key_enc, model_name, temperature, max_tokens, is_default, CAST(created_at AS TEXT), CAST(updated_at AS TEXT)";
 
 #[derive(Serialize)]
 pub struct TestConnectionResponse {
@@ -119,51 +141,17 @@ async fn list_configs(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<Vec<ModelConfigResponse>>, AppError> {
-    let rows = sqlx::query_as::<_, (
-        Uuid,
-        Option<Uuid>,
-        Uuid,
-        String,
-        String,
-        String,
-        Option<String>,
-        String,
-        Option<f32>,
-        Option<i32>,
-        Option<bool>,
-        DateTime<Utc>,
-        DateTime<Utc>,
-    )>(
-        "SELECT id, workspace_id, user_id, name, provider, api_base_url, api_key_enc,
-                model_name, temperature, max_tokens, is_default, created_at, updated_at
-         FROM model_configs
-         WHERE user_id = $1
-         ORDER BY is_default DESC NULLS LAST, created_at DESC",
-    )
-    .bind(auth.id)
-    .fetch_all(&state.pool)
-    .await?;
+    let q = format!(
+        "SELECT {} FROM model_configs WHERE user_id = $1 ORDER BY is_default DESC NULLS LAST, created_at DESC",
+        CONFIG_SELECT
+    );
+    let rows = sqlx::query_as::<_, ConfigRow>(&q)
+        .bind(auth.id.to_string())
+        .fetch_all(&state.pool)
+        .await?;
 
-    let configs: Vec<ModelConfigResponse> = rows
-        .into_iter()
-        .map(|r| ModelConfigResponse {
-            id: r.0,
-            workspace_id: r.1,
-            user_id: r.2,
-            name: r.3,
-            provider: r.4,
-            api_base_url: r.5,
-            has_api_key: r.6.is_some(),
-            model_name: r.7,
-            temperature: r.8,
-            max_tokens: r.9,
-            is_default: r.10,
-            created_at: r.11,
-            updated_at: r.12,
-        })
-        .collect();
-
-    Ok(Json(configs))
+    let configs: Result<Vec<_>, _> = rows.into_iter().map(parse_config_row).collect();
+    Ok(Json(configs?))
 }
 
 async fn create_config(
@@ -197,63 +185,30 @@ async fn create_config(
 
     if req.is_default {
         sqlx::query("UPDATE model_configs SET is_default = false WHERE user_id = $1")
-            .bind(auth.id)
+            .bind(auth.id.to_string())
             .execute(&state.pool)
             .await?;
     }
 
-    let row = sqlx::query_as::<_, (
-        Uuid,
-        Option<Uuid>,
-        Uuid,
-        String,
-        String,
-        String,
-        Option<String>,
-        String,
-        Option<f32>,
-        Option<i32>,
-        Option<bool>,
-        DateTime<Utc>,
-        DateTime<Utc>,
-    )>(
-        "INSERT INTO model_configs
-            (workspace_id, user_id, name, provider, api_base_url, api_key_enc,
-             model_name, temperature, max_tokens, is_default)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-         RETURNING id, workspace_id, user_id, name, provider, api_base_url, api_key_enc,
-                   model_name, temperature, max_tokens, is_default, created_at, updated_at",
-    )
-    .bind(req.workspace_id)
-    .bind(auth.id)
-    .bind(&name)
-    .bind(&req.provider)
-    .bind(&api_base_url)
-    .bind(&api_key_enc)
-    .bind(&model_name)
-    .bind(req.temperature)
-    .bind(req.max_tokens)
-    .bind(req.is_default)
-    .fetch_one(&state.pool)
-    .await?;
+    let q = format!(
+        "INSERT INTO model_configs (workspace_id, user_id, name, provider, api_base_url, api_key_enc, model_name, temperature, max_tokens, is_default) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING {}",
+        CONFIG_SELECT
+    );
+    let row = sqlx::query_as::<_, ConfigRow>(&q)
+        .bind(req.workspace_id.map(|u| u.to_string()))
+        .bind(auth.id.to_string())
+        .bind(&name)
+        .bind(&req.provider)
+        .bind(&api_base_url)
+        .bind(&api_key_enc)
+        .bind(&model_name)
+        .bind(req.temperature as f64)
+        .bind(req.max_tokens)
+        .bind(req.is_default)
+        .fetch_one(&state.pool)
+        .await?;
 
-    let resp = ModelConfigResponse {
-        id: row.0,
-        workspace_id: row.1,
-        user_id: row.2,
-        name: row.3,
-        provider: row.4,
-        api_base_url: row.5,
-        has_api_key: row.6.is_some(),
-        model_name: row.7,
-        temperature: row.8,
-        max_tokens: row.9,
-        is_default: row.10,
-        created_at: row.11,
-        updated_at: row.12,
-    };
-
-    Ok((StatusCode::CREATED, Json(resp)))
+    Ok((StatusCode::CREATED, Json(parse_config_row(row)?)))
 }
 
 async fn update_config(
@@ -262,11 +217,11 @@ async fn update_config(
     Path(config_id): Path<Uuid>,
     Json(req): Json<UpdateConfigRequest>,
 ) -> Result<Json<ModelConfigResponse>, AppError> {
-    let existing = sqlx::query_scalar::<_, Uuid>(
+    let existing = sqlx::query_scalar::<_, String>(
         "SELECT id FROM model_configs WHERE id = $1 AND user_id = $2",
     )
-    .bind(config_id)
-    .bind(auth.id)
+    .bind(config_id.to_string())
+    .bind(auth.id.to_string())
     .fetch_optional(&state.pool)
     .await?;
 
@@ -307,68 +262,31 @@ async fn update_config(
         sqlx::query(
             "UPDATE model_configs SET is_default = false WHERE user_id = $1 AND id != $2",
         )
-        .bind(auth.id)
-        .bind(config_id)
+        .bind(auth.id.to_string())
+        .bind(config_id.to_string())
         .execute(&state.pool)
         .await?;
     }
 
-    let row = sqlx::query_as::<_, (
-        Uuid,
-        Option<Uuid>,
-        Uuid,
-        String,
-        String,
-        String,
-        Option<String>,
-        String,
-        Option<f32>,
-        Option<i32>,
-        Option<bool>,
-        DateTime<Utc>,
-        DateTime<Utc>,
-    )>(
-        "UPDATE model_configs SET
-            name = COALESCE($1, name),
-            provider = COALESCE($2, provider),
-            api_base_url = COALESCE($3, api_base_url),
-            api_key_enc = COALESCE($4, api_key_enc),
-            model_name = COALESCE($5, model_name),
-            temperature = COALESCE($6, temperature),
-            max_tokens = COALESCE($7, max_tokens),
-            is_default = COALESCE($8, is_default)
-         WHERE id = $9 AND user_id = $10
-         RETURNING id, workspace_id, user_id, name, provider, api_base_url, api_key_enc,
-                   model_name, temperature, max_tokens, is_default, created_at, updated_at",
-    )
-    .bind(name)
-    .bind(req.provider)
-    .bind(api_base_url)
-    .bind(api_key_enc)
-    .bind(model_name)
-    .bind(req.temperature)
-    .bind(req.max_tokens)
-    .bind(req.is_default)
-    .bind(config_id)
-    .bind(auth.id)
-    .fetch_one(&state.pool)
-    .await?;
+    let q = format!(
+        "UPDATE model_configs SET name = COALESCE($1, name), provider = COALESCE($2, provider), api_base_url = COALESCE($3, api_base_url), api_key_enc = COALESCE($4, api_key_enc), model_name = COALESCE($5, model_name), temperature = COALESCE($6, temperature), max_tokens = COALESCE($7, max_tokens), is_default = COALESCE($8, is_default) WHERE id = $9 AND user_id = $10 RETURNING {}",
+        CONFIG_SELECT
+    );
+    let row = sqlx::query_as::<_, ConfigRow>(&q)
+        .bind(name)
+        .bind(req.provider)
+        .bind(api_base_url)
+        .bind(api_key_enc)
+        .bind(model_name)
+        .bind(req.temperature.map(|t| t as f64))
+        .bind(req.max_tokens)
+        .bind(req.is_default)
+        .bind(config_id.to_string())
+        .bind(auth.id.to_string())
+        .fetch_one(&state.pool)
+        .await?;
 
-    Ok(Json(ModelConfigResponse {
-        id: row.0,
-        workspace_id: row.1,
-        user_id: row.2,
-        name: row.3,
-        provider: row.4,
-        api_base_url: row.5,
-        has_api_key: row.6.is_some(),
-        model_name: row.7,
-        temperature: row.8,
-        max_tokens: row.9,
-        is_default: row.10,
-        created_at: row.11,
-        updated_at: row.12,
-    }))
+    Ok(Json(parse_config_row(row)?))
 }
 
 async fn delete_config(
@@ -377,8 +295,8 @@ async fn delete_config(
     Path(config_id): Path<Uuid>,
 ) -> Result<StatusCode, AppError> {
     let result = sqlx::query("DELETE FROM model_configs WHERE id = $1 AND user_id = $2")
-        .bind(config_id)
-        .bind(auth.id)
+        .bind(config_id.to_string())
+        .bind(auth.id.to_string())
         .execute(&state.pool)
         .await?;
 
@@ -399,8 +317,8 @@ async fn test_connection(
          FROM model_configs
          WHERE id = $1 AND user_id = $2",
     )
-    .bind(config_id)
-    .bind(auth.id)
+    .bind(config_id.to_string())
+    .bind(auth.id.to_string())
     .fetch_optional(&state.pool)
     .await?;
 

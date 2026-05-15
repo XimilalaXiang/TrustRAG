@@ -5,11 +5,11 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::auth::middleware::AuthUser;
+use crate::db::compat;
 use crate::error::AppError;
 use crate::services::storage::StorageService;
 
@@ -17,7 +17,7 @@ use super::AppState;
 
 const ALLOWED_EXTENSIONS: &[&str] = &["pdf", "docx", "md", "txt", "html"];
 
-#[derive(Serialize, sqlx::FromRow)]
+#[derive(Serialize)]
 pub struct DocumentResponse {
     pub id: Uuid,
     pub workspace_id: Uuid,
@@ -31,8 +31,8 @@ pub struct DocumentResponse {
     pub processing_status: String,
     pub processing_error: Option<String>,
     pub uploaded_by: Uuid,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
+    pub created_at: String,
+    pub updated_at: String,
 }
 
 #[derive(Deserialize)]
@@ -101,7 +101,6 @@ fn validate_file_type(filename: &str) -> Result<String, AppError> {
     Ok(ext)
 }
 
-/// Verify user has access to workspace
 async fn check_workspace_access(
     pool: &crate::db::DbPool,
     ws_id: Uuid,
@@ -118,8 +117,8 @@ async fn check_workspace_access(
         )
         "#,
     )
-    .bind(ws_id)
-    .bind(user_id)
+    .bind(ws_id.to_string())
+    .bind(user_id.to_string())
     .fetch_one(pool)
     .await?;
 
@@ -128,6 +127,30 @@ async fn check_workspace_access(
     }
     Ok(())
 }
+
+fn parse_doc_row(r: (String, String, String, String, String, Option<i64>, Option<i32>, Option<String>, Option<String>, String, Option<String>, String, String, String)) -> Result<DocumentResponse, AppError> {
+    let tags_val: Option<serde_json::Value> = r.8.as_ref().and_then(|s| serde_json::from_str(s).ok());
+    Ok(DocumentResponse {
+        id: compat::parse_uuid(&r.0).map_err(|e| AppError::Internal(e.into()))?,
+        workspace_id: compat::parse_uuid(&r.1).map_err(|e| AppError::Internal(e.into()))?,
+        title: r.2,
+        original_filename: r.3,
+        file_type: r.4,
+        file_size_bytes: r.5,
+        page_count: r.6,
+        language: r.7,
+        tags: tags_val,
+        processing_status: r.9,
+        processing_error: r.10,
+        uploaded_by: compat::parse_uuid(&r.11).map_err(|e| AppError::Internal(e.into()))?,
+        created_at: r.12,
+        updated_at: r.13,
+    })
+}
+
+type DocRow = (String, String, String, String, String, Option<i64>, Option<i32>, Option<String>, Option<String>, String, Option<String>, String, String, String);
+
+const DOC_SELECT: &str = "id, workspace_id, title, original_filename, file_type, file_size_bytes, page_count, language, CAST(tags AS TEXT), processing_status, processing_error, uploaded_by, CAST(created_at AS TEXT), CAST(updated_at AS TEXT)";
 
 async fn list_documents(
     auth: AuthUser,
@@ -142,43 +165,28 @@ async fn list_documents(
     let offset = (page - 1) * per_page;
 
     let total = sqlx::query_scalar::<_, i64>(
-        r#"
-        SELECT COUNT(*) FROM documents
-        WHERE workspace_id = $1
-          AND ($2::text IS NULL OR processing_status = $2)
-          AND ($3::text IS NULL OR file_type = $3)
-        "#,
+        "SELECT COUNT(*) FROM documents WHERE workspace_id = $1",
     )
-    .bind(ws_id)
-    .bind(&params.status)
-    .bind(&params.file_type)
+    .bind(ws_id.to_string())
     .fetch_one(&state.pool)
     .await?;
 
-    let items = sqlx::query_as::<_, DocumentResponse>(
-        r#"
-        SELECT id, workspace_id, title, original_filename, file_type,
-               file_size_bytes, page_count, language, tags,
-               processing_status, processing_error, uploaded_by,
-               created_at, updated_at
-        FROM documents
-        WHERE workspace_id = $1
-          AND ($2::text IS NULL OR processing_status = $2)
-          AND ($3::text IS NULL OR file_type = $3)
-        ORDER BY created_at DESC
-        LIMIT $4 OFFSET $5
-        "#,
-    )
-    .bind(ws_id)
-    .bind(&params.status)
-    .bind(&params.file_type)
-    .bind(per_page)
-    .bind(offset)
-    .fetch_all(&state.pool)
-    .await?;
+    let q = format!(
+        "SELECT {} FROM documents WHERE workspace_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3",
+        DOC_SELECT
+    );
+
+    let rows = sqlx::query_as::<_, DocRow>(&q)
+        .bind(ws_id.to_string())
+        .bind(per_page)
+        .bind(offset)
+        .fetch_all(&state.pool)
+        .await?;
+
+    let items: Result<Vec<_>, _> = rows.into_iter().map(parse_doc_row).collect();
 
     Ok(Json(PaginatedDocuments {
-        items,
+        items: items?,
         total,
         page,
         per_page,
@@ -263,32 +271,26 @@ async fn upload_document(
         .await
         .map_err(|e| AppError::Internal(anyhow::anyhow!("Storage upload failed: {e}")))?;
 
-    let doc = sqlx::query_as::<_, DocumentResponse>(
-        r#"
-        INSERT INTO documents (
-            id, workspace_id, title, original_filename, file_type,
-            file_size_bytes, tags, original_file_path, uploaded_by
-        )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-        RETURNING id, workspace_id, title, original_filename, file_type,
-                  file_size_bytes, page_count, language, tags,
-                  processing_status, processing_error, uploaded_by,
-                  created_at, updated_at
-        "#,
-    )
-    .bind(doc_id)
-    .bind(ws_id)
-    .bind(&doc_title)
-    .bind(&original_filename)
-    .bind(&file_type)
-    .bind(file_size)
-    .bind(&tags.unwrap_or_else(|| serde_json::json!([])))
-    .bind(&storage_path)
-    .bind(auth.id)
-    .fetch_one(&state.pool)
-    .await?;
+    let tags_str = serde_json::to_string(&tags.unwrap_or_else(|| serde_json::json!([]))).unwrap_or_default();
 
-    // Trigger async document processing
+    let q = format!(
+        "INSERT INTO documents (id, workspace_id, title, original_filename, file_type, file_size_bytes, tags, original_file_path, uploaded_by) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING {}",
+        DOC_SELECT
+    );
+
+    let row = sqlx::query_as::<_, DocRow>(&q)
+        .bind(doc_id.to_string())
+        .bind(ws_id.to_string())
+        .bind(&doc_title)
+        .bind(&original_filename)
+        .bind(&file_type)
+        .bind(file_size)
+        .bind(&tags_str)
+        .bind(&storage_path)
+        .bind(auth.id.to_string())
+        .fetch_one(&state.pool)
+        .await?;
+
     let pool = state.pool.clone();
     let storage = state.storage.clone();
     let doc_processor_url = state.doc_processor_url.clone();
@@ -305,7 +307,7 @@ async fn upload_document(
         .await;
     });
 
-    Ok((StatusCode::CREATED, Json(doc)))
+    Ok((StatusCode::CREATED, Json(parse_doc_row(row)?)))
 }
 
 async fn get_document(
@@ -315,23 +317,19 @@ async fn get_document(
 ) -> Result<Json<DocumentResponse>, AppError> {
     check_workspace_access(&state.pool, ws_id, auth.id).await?;
 
-    let doc = sqlx::query_as::<_, DocumentResponse>(
-        r#"
-        SELECT id, workspace_id, title, original_filename, file_type,
-               file_size_bytes, page_count, language, tags,
-               processing_status, processing_error, uploaded_by,
-               created_at, updated_at
-        FROM documents
-        WHERE id = $1 AND workspace_id = $2
-        "#,
-    )
-    .bind(doc_id)
-    .bind(ws_id)
-    .fetch_optional(&state.pool)
-    .await?
-    .ok_or_else(|| AppError::NotFound("Document not found".into()))?;
+    let q = format!(
+        "SELECT {} FROM documents WHERE id = $1 AND workspace_id = $2",
+        DOC_SELECT
+    );
 
-    Ok(Json(doc))
+    let row = sqlx::query_as::<_, DocRow>(&q)
+        .bind(doc_id.to_string())
+        .bind(ws_id.to_string())
+        .fetch_optional(&state.pool)
+        .await?
+        .ok_or_else(|| AppError::NotFound("Document not found".into()))?;
+
+    Ok(Json(parse_doc_row(row)?))
 }
 
 async fn delete_document(
@@ -344,8 +342,8 @@ async fn delete_document(
     let _doc = sqlx::query_as::<_, (String,)>(
         "SELECT original_file_path FROM documents WHERE id = $1 AND workspace_id = $2",
     )
-    .bind(doc_id)
-    .bind(ws_id)
+    .bind(doc_id.to_string())
+    .bind(ws_id.to_string())
     .fetch_optional(&state.pool)
     .await?
     .ok_or_else(|| AppError::NotFound("Document not found".into()))?;
@@ -356,8 +354,8 @@ async fn delete_document(
     }
 
     sqlx::query("DELETE FROM documents WHERE id = $1 AND workspace_id = $2")
-        .bind(doc_id)
-        .bind(ws_id)
+        .bind(doc_id.to_string())
+        .bind(ws_id.to_string())
         .execute(&state.pool)
         .await?;
 
@@ -374,8 +372,8 @@ async fn download_file(
     let doc = sqlx::query_as::<_, (String, String)>(
         "SELECT original_file_path, original_filename FROM documents WHERE id = $1 AND workspace_id = $2",
     )
-    .bind(doc_id)
-    .bind(ws_id)
+    .bind(doc_id.to_string())
+    .bind(ws_id.to_string())
     .fetch_optional(&state.pool)
     .await?
     .ok_or_else(|| AppError::NotFound("Document not found".into()))?;
@@ -416,22 +414,17 @@ async fn reprocess_document(
 ) -> Result<Json<DocumentResponse>, AppError> {
     check_workspace_access(&state.pool, ws_id, auth.id).await?;
 
-    let doc = sqlx::query_as::<_, DocumentResponse>(
-        r#"
-        UPDATE documents
-        SET processing_status = 'pending', processing_error = NULL
-        WHERE id = $1 AND workspace_id = $2
-        RETURNING id, workspace_id, title, original_filename, file_type,
-                  file_size_bytes, page_count, language, tags,
-                  processing_status, processing_error, uploaded_by,
-                  created_at, updated_at
-        "#,
-    )
-    .bind(doc_id)
-    .bind(ws_id)
-    .fetch_optional(&state.pool)
-    .await?
-    .ok_or_else(|| AppError::NotFound("Document not found".into()))?;
+    let q = format!(
+        "UPDATE documents SET processing_status = 'pending', processing_error = NULL WHERE id = $1 AND workspace_id = $2 RETURNING {}",
+        DOC_SELECT
+    );
+
+    let row = sqlx::query_as::<_, DocRow>(&q)
+        .bind(doc_id.to_string())
+        .bind(ws_id.to_string())
+        .fetch_optional(&state.pool)
+        .await?
+        .ok_or_else(|| AppError::NotFound("Document not found".into()))?;
 
     let pool = state.pool.clone();
     let storage = state.storage.clone();
@@ -449,18 +442,16 @@ async fn reprocess_document(
         .await;
     });
 
-    Ok(Json(doc))
+    Ok(Json(parse_doc_row(row)?))
 }
 
-// === Chunk and Markdown endpoints ===
-
-#[derive(Serialize, sqlx::FromRow)]
+#[derive(Serialize)]
 pub struct ChunkResponse {
     pub id: Uuid,
     pub document_id: Uuid,
     pub chunk_index: i32,
     pub heading_path: Option<String>,
-    pub section_level: Option<i16>,
+    pub section_level: Option<i32>,
     pub content: String,
     pub content_tokens: Option<i32>,
     pub page_start: Option<i32>,
@@ -469,7 +460,7 @@ pub struct ChunkResponse {
     pub char_start: Option<i64>,
     pub char_end: Option<i64>,
     pub content_hash: Option<String>,
-    pub created_at: DateTime<Utc>,
+    pub created_at: String,
 }
 
 #[derive(Deserialize)]
@@ -497,8 +488,8 @@ async fn list_chunks(
     sqlx::query_scalar::<_, bool>(
         "SELECT EXISTS(SELECT 1 FROM documents WHERE id = $1 AND workspace_id = $2)",
     )
-    .bind(doc_id)
-    .bind(ws_id)
+    .bind(doc_id.to_string())
+    .bind(ws_id.to_string())
     .fetch_one(&state.pool)
     .await?
     .then_some(())
@@ -511,26 +502,46 @@ async fn list_chunks(
     let total = sqlx::query_scalar::<_, i64>(
         "SELECT COUNT(*) FROM document_chunks WHERE document_id = $1",
     )
-    .bind(doc_id)
+    .bind(doc_id.to_string())
     .fetch_one(&state.pool)
     .await?;
 
-    let items = sqlx::query_as::<_, ChunkResponse>(
+    let rows = sqlx::query_as::<_, (String, String, i32, Option<String>, Option<i32>, String, Option<i32>, Option<i32>, Option<i32>, Option<i32>, Option<i64>, Option<i64>, Option<String>, String)>(
         r#"
         SELECT id, document_id, chunk_index, heading_path, section_level,
                content, content_tokens, page_start, page_end,
-               paragraph_index, char_start, char_end, content_hash, created_at
+               paragraph_index, char_start, char_end, content_hash, CAST(created_at AS TEXT)
         FROM document_chunks
         WHERE document_id = $1
         ORDER BY chunk_index ASC
         LIMIT $2 OFFSET $3
         "#,
     )
-    .bind(doc_id)
+    .bind(doc_id.to_string())
     .bind(per_page)
     .bind(offset)
     .fetch_all(&state.pool)
     .await?;
+
+    let mut items = Vec::with_capacity(rows.len());
+    for r in rows {
+        items.push(ChunkResponse {
+            id: compat::parse_uuid(&r.0).map_err(|e| AppError::Internal(e.into()))?,
+            document_id: compat::parse_uuid(&r.1).map_err(|e| AppError::Internal(e.into()))?,
+            chunk_index: r.2,
+            heading_path: r.3,
+            section_level: r.4,
+            content: r.5,
+            content_tokens: r.6,
+            page_start: r.7,
+            page_end: r.8,
+            paragraph_index: r.9,
+            char_start: r.10,
+            char_end: r.11,
+            content_hash: r.12,
+            created_at: r.13,
+        });
+    }
 
     Ok(Json(PaginatedChunks {
         items,
@@ -550,8 +561,8 @@ async fn get_markdown(
     let doc = sqlx::query_as::<_, (Option<String>, String)>(
         "SELECT markdown_file_path, title FROM documents WHERE id = $1 AND workspace_id = $2",
     )
-    .bind(doc_id)
-    .bind(ws_id)
+    .bind(doc_id.to_string())
+    .bind(ws_id.to_string())
     .fetch_optional(&state.pool)
     .await?
     .ok_or_else(|| AppError::NotFound("Document not found".into()))?;

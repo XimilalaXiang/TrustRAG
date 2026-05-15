@@ -78,8 +78,8 @@ async fn check_workspace_access(
         )
         "#,
     )
-    .bind(ws_id)
-    .bind(user_id)
+    .bind(ws_id.to_string())
+    .bind(user_id.to_string())
     .fetch_one(pool)
     .await?;
 
@@ -101,7 +101,7 @@ async fn get_graph(
         "SELECT id, name, entity_type, document_id, metadata, created_at
          FROM entities WHERE workspace_id = $1 ORDER BY name",
     )
-    .bind(ws_id)
+    .bind(ws_id.to_string())
     .fetch_all(&state.pool)
     .await?;
 
@@ -109,7 +109,7 @@ async fn get_graph(
         "SELECT id, source_entity_id, target_entity_id, relation_type, weight
          FROM entity_relations WHERE workspace_id = $1",
     )
-    .bind(ws_id)
+    .bind(ws_id.to_string())
     .fetch_all(&state.pool)
     .await?;
 
@@ -146,7 +146,7 @@ async fn list_entities(
         "SELECT id, name, entity_type, document_id, metadata, created_at
          FROM entities WHERE workspace_id = $1 ORDER BY created_at DESC LIMIT 200",
     )
-    .bind(ws_id)
+    .bind(ws_id.to_string())
     .fetch_all(&state.pool)
     .await?;
 

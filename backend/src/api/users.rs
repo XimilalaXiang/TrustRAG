@@ -90,7 +90,7 @@ async fn register(
         .map_err(|e| AppError::Internal(anyhow::anyhow!("Hash error: {e}")))?
         .to_string();
 
-    let user = sqlx::query_as::<_, (Uuid, String, String, String)>(
+    let row = sqlx::query_as::<_, (String, String, String, String)>(
         "INSERT INTO users (email, password_hash, display_name) VALUES ($1, $2, $3) RETURNING id, email, display_name, role",
     )
     .bind(&email)
@@ -99,8 +99,11 @@ async fn register(
     .fetch_one(&state.pool)
     .await?;
 
+    let user_id: Uuid = row.0.parse()
+        .map_err(|e| AppError::Internal(anyhow::anyhow!("UUID parse error: {e}")))?;
+
     let expiry_hours: i64 = 24;
-    let token = create_token(user.0, &user.1, &user.3, &state.jwt_secret, expiry_hours)
+    let token = create_token(user_id, &row.1, &row.3, &state.jwt_secret, expiry_hours)
         .map_err(|e| AppError::Internal(anyhow::anyhow!("Token error: {e}")))?;
 
     Ok((
@@ -109,10 +112,10 @@ async fn register(
             access_token: token,
             expires_in: expiry_hours * 3600,
             user: UserResponse {
-                id: user.0,
-                email: user.1,
-                display_name: user.2,
-                role: user.3,
+                id: user_id,
+                email: row.1,
+                display_name: row.2,
+                role: row.3,
             },
         }),
     ))
@@ -123,7 +126,7 @@ async fn login(
     Json(req): Json<LoginRequest>,
 ) -> Result<Json<AuthResponse>, AppError> {
     let email = req.email.trim().to_lowercase();
-    let row = sqlx::query_as::<_, (Uuid, String, String, String, String)>(
+    let row = sqlx::query_as::<_, (String, String, String, String, String)>(
         "SELECT id, email, password_hash, display_name, role FROM users WHERE email = $1 AND status = 'active'",
     )
     .bind(&email)
@@ -131,7 +134,9 @@ async fn login(
     .await?
     .ok_or_else(|| AppError::Auth("Invalid email or password".into()))?;
 
-    let (user_id, email, stored_hash, display_name, role) = row;
+    let user_id: Uuid = row.0.parse()
+        .map_err(|e| AppError::Internal(anyhow::anyhow!("UUID parse error: {e}")))?;
+    let (email, stored_hash, display_name, role) = (row.1, row.2, row.3, row.4);
 
     let parsed_hash = PasswordHash::new(&stored_hash)
         .map_err(|e| AppError::Internal(anyhow::anyhow!("Hash parse error: {e}")))?;
@@ -140,8 +145,8 @@ async fn login(
         .verify_password(req.password.as_bytes(), &parsed_hash)
         .map_err(|_| AppError::Auth("Invalid email or password".into()))?;
 
-    sqlx::query("UPDATE users SET last_login_at = now() WHERE id = $1")
-        .bind(user_id)
+    sqlx::query("UPDATE users SET last_login_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = $1")
+        .bind(user_id.to_string())
         .execute(&state.pool)
         .await?;
 
@@ -165,15 +170,18 @@ async fn me(
     auth: AuthUser,
     State(state): State<AppState>,
 ) -> Result<Json<UserResponse>, AppError> {
-    let row = sqlx::query_as::<_, (Uuid, String, String, String)>(
+    let row = sqlx::query_as::<_, (String, String, String, String)>(
         "SELECT id, email, display_name, role FROM users WHERE id = $1",
     )
-    .bind(auth.id)
+    .bind(auth.id.to_string())
     .fetch_one(&state.pool)
     .await?;
 
+    let user_id: Uuid = row.0.parse()
+        .map_err(|e| AppError::Internal(anyhow::anyhow!("UUID parse error: {e}")))?;
+
     Ok(Json(UserResponse {
-        id: row.0,
+        id: user_id,
         email: row.1,
         display_name: row.2,
         role: row.3,
@@ -192,7 +200,7 @@ async fn update_profile(
         }
         sqlx::query("UPDATE users SET display_name = $1 WHERE id = $2")
             .bind(trimmed)
-            .bind(auth.id)
+            .bind(auth.id.to_string())
             .execute(&state.pool)
             .await?;
     }
@@ -214,7 +222,7 @@ async fn change_password(
     let stored_hash = sqlx::query_scalar::<_, String>(
         "SELECT password_hash FROM users WHERE id = $1",
     )
-    .bind(auth.id)
+    .bind(auth.id.to_string())
     .fetch_one(&state.pool)
     .await?;
 
@@ -233,7 +241,7 @@ async fn change_password(
 
     sqlx::query("UPDATE users SET password_hash = $1 WHERE id = $2")
         .bind(&new_hash)
-        .bind(auth.id)
+        .bind(auth.id.to_string())
         .execute(&state.pool)
         .await?;
 

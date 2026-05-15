@@ -46,8 +46,8 @@ async fn search(
         )
         "#,
     )
-    .bind(ws_id)
-    .bind(auth.id)
+    .bind(ws_id.to_string())
+    .bind(auth.id.to_string())
     .fetch_one(&state.pool)
     .await?;
 

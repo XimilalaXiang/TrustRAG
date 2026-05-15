@@ -104,16 +104,16 @@ pub async fn store_citations(
             continue;
         }
 
-        let id = sqlx::query_scalar::<_, Uuid>(
+        let id_str = sqlx::query_scalar::<_, String>(
             "INSERT INTO citations
                 (message_id, document_id, chunk_id, citation_index, quoted_text,
                  page_number, heading_path, relevance_score, verified)
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true)
              RETURNING id",
         )
-        .bind(message_id)
-        .bind(c.document_id)
-        .bind(c.chunk_id)
+        .bind(message_id.to_string())
+        .bind(c.document_id.to_string())
+        .bind(c.chunk_id.to_string())
         .bind(c.citation_index as i16)
         .bind(&c.quoted_text)
         .bind(c.page_number)
@@ -122,6 +122,7 @@ pub async fn store_citations(
         .fetch_one(pool)
         .await?;
 
+        let id: Uuid = id_str.parse()?;
         ids.push(id);
     }
 

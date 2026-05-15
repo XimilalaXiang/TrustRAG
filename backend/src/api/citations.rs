@@ -47,7 +47,7 @@ async fn list_citations(
          WHERE message_id = $1
          ORDER BY citation_index ASC",
     )
-    .bind(message_id)
+    .bind(message_id.to_string())
     .fetch_all(&state.pool)
     .await?;
 

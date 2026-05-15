@@ -41,8 +41,8 @@ async fn check_workspace_access(
         )
         "#,
     )
-    .bind(ws_id)
-    .bind(user_id)
+    .bind(ws_id.to_string())
+    .bind(user_id.to_string())
     .fetch_one(pool)
     .await?;
 
@@ -171,8 +171,8 @@ async fn create_conversation(
          VALUES ($1, $2, $3, $4, $5)
          RETURNING id, workspace_id, user_id, title, model_config_id, document_scope, created_at, updated_at",
     )
-    .bind(ws_id)
-    .bind(auth.id)
+    .bind(ws_id.to_string())
+    .bind(auth.id.to_string())
     .bind(&req.title)
     .bind(req.model_config_id)
     .bind(&scope_json)
@@ -195,8 +195,8 @@ async fn list_conversations(
          WHERE workspace_id = $1 AND user_id = $2
          ORDER BY updated_at DESC",
     )
-    .bind(ws_id)
-    .bind(auth.id)
+    .bind(ws_id.to_string())
+    .bind(auth.id.to_string())
     .fetch_all(&state.pool)
     .await?;
 
@@ -213,9 +213,9 @@ async fn get_conversation(
          FROM conversations
          WHERE id = $1 AND workspace_id = $2 AND user_id = $3",
     )
-    .bind(conv_id)
-    .bind(ws_id)
-    .bind(auth.id)
+    .bind(conv_id.to_string())
+    .bind(ws_id.to_string())
+    .bind(auth.id.to_string())
     .fetch_optional(&state.pool)
     .await?
     .ok_or_else(|| AppError::NotFound("Conversation not found".into()))?;
@@ -231,9 +231,9 @@ async fn delete_conversation(
     let result = sqlx::query(
         "DELETE FROM conversations WHERE id = $1 AND workspace_id = $2 AND user_id = $3",
     )
-    .bind(conv_id)
-    .bind(ws_id)
-    .bind(auth.id)
+    .bind(conv_id.to_string())
+    .bind(ws_id.to_string())
+    .bind(auth.id.to_string())
     .execute(&state.pool)
     .await?;
 
@@ -250,12 +250,12 @@ async fn list_messages(
     Path((ws_id, conv_id)): Path<(Uuid, Uuid)>,
 ) -> Result<Json<Vec<MessageResponse>>, AppError> {
     // Verify ownership
-    let _conv = sqlx::query_scalar::<_, Uuid>(
+    let _conv = sqlx::query_scalar::<_, String>(
         "SELECT id FROM conversations WHERE id = $1 AND workspace_id = $2 AND user_id = $3",
     )
-    .bind(conv_id)
-    .bind(ws_id)
-    .bind(auth.id)
+    .bind(conv_id.to_string())
+    .bind(ws_id.to_string())
+    .bind(auth.id.to_string())
     .fetch_optional(&state.pool)
     .await?
     .ok_or_else(|| AppError::NotFound("Conversation not found".into()))?;
@@ -267,7 +267,7 @@ async fn list_messages(
          WHERE conversation_id = $1
          ORDER BY created_at ASC",
     )
-    .bind(conv_id)
+    .bind(conv_id.to_string())
     .fetch_all(&state.pool)
     .await?;
 
@@ -301,9 +301,9 @@ async fn send_message(
         "SELECT model_config_id, document_scope
          FROM conversations WHERE id = $1 AND workspace_id = $2 AND user_id = $3",
     )
-    .bind(conv_id)
-    .bind(ws_id)
-    .bind(auth.id)
+    .bind(conv_id.to_string())
+    .bind(ws_id.to_string())
+    .bind(auth.id.to_string())
     .fetch_optional(&state.pool)
     .await?
     .ok_or_else(|| AppError::NotFound("Conversation not found".into()))?;
@@ -314,13 +314,13 @@ async fn send_message(
     sqlx::query(
         "INSERT INTO messages (conversation_id, role, content) VALUES ($1, 'user', $2)",
     )
-    .bind(conv_id)
+    .bind(conv_id.to_string())
     .bind(&content)
     .execute(&state.pool)
     .await?;
 
     sqlx::query("UPDATE conversations SET updated_at = NOW() WHERE id = $1")
-        .bind(conv_id)
+        .bind(conv_id.to_string())
         .execute(&state.pool)
         .await?;
 
@@ -335,7 +335,7 @@ async fn send_message(
                  FROM model_configs WHERE id = $1 AND user_id = $2",
             )
             .bind(mc_id)
-            .bind(auth.id)
+            .bind(auth.id.to_string())
             .fetch_optional(&state.pool)
             .await?
             .ok_or_else(|| AppError::NotFound("Model config not found".into()))?
@@ -345,7 +345,7 @@ async fn send_message(
                 "SELECT provider, api_base_url, api_key_enc, model_name, temperature, max_tokens
                  FROM model_configs WHERE user_id = $1 AND is_default = true LIMIT 1",
             )
-            .bind(auth.id)
+            .bind(auth.id.to_string())
             .fetch_optional(&state.pool)
             .await?
             .ok_or_else(|| AppError::BadRequest("No model configured. Please create a model config first.".into()))?
@@ -378,7 +378,7 @@ async fn send_message(
             OFFSET 1
          ) sub ORDER BY created_at ASC",
     )
-    .bind(conv_id)
+    .bind(conv_id.to_string())
     .fetch_all(&state.pool)
     .await?;
 
@@ -440,7 +440,7 @@ async fn send_message(
              VALUES ($1, 'assistant', $2, $3, $4, $5, $6)
              RETURNING id, conversation_id, role, content, model_name, prompt_tokens, completion_tokens, latency_ms, created_at",
         )
-        .bind(conv_id)
+        .bind(conv_id.to_string())
         .bind(&result.answer)
         .bind(&result.model)
         .bind(result.prompt_tokens as i32)
@@ -614,8 +614,8 @@ fn build_sse_stream(
                         "INSERT INTO messages (id, conversation_id, role, content, model_name, prompt_tokens, completion_tokens, latency_ms)
                          VALUES ($1, $2, 'assistant', $3, $4, $5, $6, $7)",
                     )
-                    .bind(message_id)
-                    .bind(conv_id)
+                    .bind(message_id.to_string())
+                    .bind(conv_id.to_string())
                     .bind(&full_content)
                     .bind(llm_provider.model_name())
                     .bind(final_prompt_tokens as i32)
@@ -715,8 +715,8 @@ fn build_sse_stream(
                 "INSERT INTO messages (id, conversation_id, role, content, model_name, prompt_tokens, completion_tokens, latency_ms)
                  VALUES ($1, $2, 'assistant', $3, $4, $5, $6, $7)",
             )
-            .bind(message_id)
-            .bind(conv_id)
+            .bind(message_id.to_string())
+            .bind(conv_id.to_string())
             .bind(&full_content)
             .bind(llm_provider.model_name())
             .bind(final_prompt_tokens as i32)
