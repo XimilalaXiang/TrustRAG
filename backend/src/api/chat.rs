@@ -19,6 +19,7 @@ use uuid::Uuid;
 use crate::auth::middleware::AuthUser;
 use crate::error::AppError;
 use crate::services::llm::OpenAILlmProvider;
+use crate::services::citation;
 use crate::services::rag::{self, AssembledSource, RagConfig};
 use crate::traits::llm_provider::{LlmMessage, LlmProvider, StreamEvent};
 
@@ -448,6 +449,18 @@ async fn send_message(
         .fetch_one(&state.pool)
         .await?;
 
+        if !result.sources.is_empty() {
+            if let Err(e) = citation::process_citations(
+                &state.pool, msg.id, &result.answer, &result.sources
+            ).await {
+                tracing::error!(
+                    message_id = %msg.id,
+                    error = %e,
+                    "Failed to store citations"
+                );
+            }
+        }
+
         let citations: Vec<CitationEvent> = result
             .sources
             .iter()
@@ -615,6 +628,18 @@ fn build_sse_stream(
                             error = %e,
                             "Failed to save assistant message to database"
                         );
+                    }
+
+                    if !sources.is_empty() {
+                        if let Err(e) = citation::process_citations(
+                            &pool, message_id, &full_content, &sources
+                        ).await {
+                            tracing::error!(
+                                message_id = %message_id,
+                                error = %e,
+                                "Failed to store citations"
+                            );
+                        }
                     }
 
                     let end_data = serde_json::to_string(&MessageEndEvent {
