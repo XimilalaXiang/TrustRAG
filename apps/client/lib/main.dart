@@ -2,11 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/router/app_router.dart';
+import 'core/services/backend_manager.dart';
 import 'core/theme/app_theme.dart';
 
 final themeModeProvider = StateProvider<ThemeMode>((ref) => ThemeMode.system);
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  if (BackendManager.shouldRunEmbedded) {
+    debugPrint('[App] Starting embedded backend...');
+    await BackendManager().start();
+    debugPrint('[App] Backend ready at ${BackendManager().baseUrl}');
+  }
+
   runApp(const ProviderScope(child: TrustRAGApp()));
 }
 

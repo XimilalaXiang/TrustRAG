@@ -1,13 +1,17 @@
 import 'package:dio/dio.dart';
 import 'package:dio_cache_interceptor/dio_cache_interceptor.dart';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import '../services/backend_manager.dart';
 
 class ApiClient {
   late final Dio dio;
   final String baseUrl;
   static const _tokenKey = 'auth_token';
 
-  ApiClient({String? baseUrl}) : baseUrl = baseUrl ?? 'http://localhost:3000' {
+  ApiClient({String? baseUrl})
+      : baseUrl = baseUrl ?? _resolveBaseUrl() {
     dio = Dio(BaseOptions(
       baseUrl: this.baseUrl,
       connectTimeout: const Duration(seconds: 10),
@@ -40,6 +44,24 @@ class ApiClient {
       maxStale: const Duration(minutes: 5),
     );
     dio.interceptors.add(DioCacheInterceptor(options: cacheOptions));
+  }
+
+  static String _resolveBaseUrl() {
+    if (BackendManager.shouldRunEmbedded && BackendManager().isRunning) {
+      return BackendManager().baseUrl;
+    }
+
+    const envUrl = String.fromEnvironment(
+      'API_BASE_URL',
+      defaultValue: '',
+    );
+    if (envUrl.isNotEmpty) return envUrl;
+
+    if (kIsWeb) {
+      return const String.fromEnvironment('API_BASE_URL', defaultValue: '/api');
+    }
+
+    return 'http://localhost:8080';
   }
 
   static Future<void> saveToken(String token) async {
