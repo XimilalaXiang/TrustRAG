@@ -11,7 +11,7 @@ use uuid::Uuid;
 
 use crate::auth::middleware::AuthUser;
 use crate::error::AppError;
-use crate::services::embedding::OpenAIEmbeddingProvider;
+use crate::services::embedding::{OpenAIEmbeddingProvider, OllamaEmbeddingProvider};
 use crate::traits::embedding_provider::EmbeddingProvider;
 
 use super::AppState;
@@ -402,8 +402,8 @@ async fn test_connection(
 }
 
 async fn reload_embedding_provider(state: &AppState) {
-    let row = sqlx::query_as::<_, (Option<String>, Option<String>, String, i32)>(
-        "SELECT api_base_url, api_key_enc, model_name, dimensions
+    let row = sqlx::query_as::<_, (String, Option<String>, Option<String>, String, i32)>(
+        "SELECT provider, api_base_url, api_key_enc, model_name, dimensions
          FROM embedding_configs
          WHERE is_default = true
          ORDER BY updated_at DESC
@@ -413,19 +413,27 @@ async fn reload_embedding_provider(state: &AppState) {
     .await;
 
     match row {
-        Ok(Some((api_base_url, api_key_enc, model_name, dimensions))) => {
+        Ok(Some((provider_type, api_base_url, api_key_enc, model_name, dimensions))) => {
             let api_key = api_key_enc.and_then(|enc| decrypt_api_key(&enc, &state.jwt_secret));
             let base_url = api_base_url.unwrap_or_default();
-            let provider = Arc::new(OpenAIEmbeddingProvider::new(
-                &base_url,
-                api_key.as_deref(),
-                &model_name,
-                dimensions as usize,
-            )) as Arc<dyn EmbeddingProvider>;
+            let provider: Arc<dyn EmbeddingProvider> = if provider_type == "ollama" {
+                Arc::new(OllamaEmbeddingProvider::new(
+                    &base_url,
+                    &model_name,
+                    dimensions as usize,
+                ))
+            } else {
+                Arc::new(OpenAIEmbeddingProvider::new(
+                    &base_url,
+                    api_key.as_deref(),
+                    &model_name,
+                    dimensions as usize,
+                ))
+            };
 
             let mut guard = state.embedding_provider.write().await;
             *guard = Some(provider);
-            tracing::info!(model = %model_name, dimensions, "Embedding provider reloaded");
+            tracing::info!(provider = %provider_type, model = %model_name, dimensions, "Embedding provider reloaded");
         }
         Ok(None) => {
             let mut guard = state.embedding_provider.write().await;
