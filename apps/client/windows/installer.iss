@@ -4,7 +4,7 @@ AppVersion=1.0.0
 AppPublisher=TrustRAG Team
 DefaultDirName={autopf}\TrustRAG
 DefaultGroupName=TrustRAG
-OutputDir=..\..\
+OutputDir=..\
 OutputBaseFilename=TrustRAG-Setup-Windows-x64
 Compression=lzma2
 SolidCompression=yes
@@ -17,7 +17,7 @@ WizardStyle=modern
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
-Source: "..\..\build\windows\x64\runner\Release\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\build\windows\x64\runner\Release\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{group}\TrustRAG"; Filename: "{app}\client.exe"

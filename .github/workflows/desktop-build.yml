@@ -49,8 +49,9 @@ jobs:
         run: flutter build windows --release
 
       - name: Create Windows installer (Inno Setup)
+        working-directory: apps/client
         run: |
-          iscc apps/client/windows/installer.iss
+          iscc windows/installer.iss
 
       - name: Package Windows portable
         run: |
