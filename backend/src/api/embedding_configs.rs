@@ -363,12 +363,20 @@ async fn test_connection(
 
     let start = std::time::Instant::now();
 
-    let emb_provider = OpenAIEmbeddingProvider::new(
-        &base_url,
-        api_key.as_deref(),
-        &model_name,
-        dimensions as usize,
-    );
+    let emb_provider: Box<dyn EmbeddingProvider> = if provider == "ollama" {
+        Box::new(OllamaEmbeddingProvider::new(
+            &base_url,
+            &model_name,
+            dimensions as usize,
+        ))
+    } else {
+        Box::new(OpenAIEmbeddingProvider::new(
+            &base_url,
+            api_key.as_deref(),
+            &model_name,
+            dimensions as usize,
+        ))
+    };
 
     match emb_provider.embed_texts(&["Hello, this is a test.".to_string()]).await {
         Ok(embeddings) => {
