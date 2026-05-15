@@ -221,6 +221,20 @@ async fn update_config(
         return Err(AppError::NotFound("Embedding config not found".into()));
     }
 
+    let name = req.name.map(|n| n.trim().to_string());
+    if let Some(ref n) = name {
+        if n.is_empty() {
+            return Err(AppError::BadRequest("Config name cannot be empty".into()));
+        }
+    }
+    let model_name = req.model_name.map(|n| n.trim().to_string());
+    if let Some(ref n) = model_name {
+        if n.is_empty() {
+            return Err(AppError::BadRequest("Model name cannot be empty".into()));
+        }
+    }
+    let api_base_url = req.api_base_url.map(|u| u.trim().to_string());
+
     if let Some(provider) = &req.provider {
         let valid = ["openai", "ollama", "local", "custom"];
         if !valid.contains(&provider.as_str()) {
@@ -262,11 +276,11 @@ async fn update_config(
          RETURNING id, workspace_id, user_id, name, provider, api_base_url, api_key_enc,
                    model_name, dimensions, is_default, created_at, updated_at",
     )
-    .bind(req.name)
+    .bind(name)
     .bind(req.provider)
-    .bind(req.api_base_url)
+    .bind(api_base_url)
     .bind(api_key_enc)
-    .bind(req.model_name)
+    .bind(model_name)
     .bind(req.dimensions)
     .bind(req.is_default)
     .bind(config_id)
