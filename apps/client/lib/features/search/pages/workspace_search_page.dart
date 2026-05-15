@@ -160,11 +160,11 @@ class _WorkspaceSearchPageState extends ConsumerState<WorkspaceSearchPage> {
                   itemBuilder: (context, index) {
                     final r = _results[index];
                     final content = r['content'] as String? ?? '';
-                    final docName =
-                        r['document_name'] as String? ?? '未知文档';
+                    final docId =
+                        r['document_id'] as String? ?? '';
                     final score = (r['relevance_score'] as num?)?.toDouble() ?? 0;
-                    final page = r['page_number'] as int?;
-                    final heading = r['heading'] as String?;
+                    final page = r['page_start'] as int?;
+                    final heading = r['heading_path'] as String?;
 
                     return Card(
                       margin: const EdgeInsets.only(bottom: 12),
@@ -191,7 +191,10 @@ class _WorkspaceSearchPageState extends ConsumerState<WorkspaceSearchPage> {
                                 ),
                                 const SizedBox(width: 8),
                                 Expanded(
-                                  child: Text(docName,
+                                  child: Text(
+                                      docId.length > 8
+                                          ? '文档 ${docId.substring(0, 8)}...'
+                                          : '文档 $docId',
                                       style: const TextStyle(
                                           fontWeight: FontWeight.w600,
                                           fontSize: 14)),
