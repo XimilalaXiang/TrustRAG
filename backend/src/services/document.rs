@@ -77,6 +77,78 @@ pub async fn process_document(
     }
 }
 
+/// Parse a document, returning (markdown, page_count, language, title).
+/// In server mode, calls the external Python doc-processor.
+/// In desktop mode, uses built-in Rust parsers.
+#[cfg(feature = "postgres")]
+async fn parse_document(
+    file_bytes: &[u8],
+    filename: &str,
+    file_type: &str,
+    doc_processor_url: &str,
+) -> anyhow::Result<(String, Option<i32>, Option<String>, Option<String>)> {
+    let parse_url = match file_type {
+        "pdf" => format!("{}/api/parse/pdf", doc_processor_url),
+        "docx" => format!("{}/api/parse/docx", doc_processor_url),
+        "txt" | "md" | "html" => format!("{}/api/parse/txt", doc_processor_url),
+        _ => anyhow::bail!("Unsupported file type: {}", file_type),
+    };
+
+    let client = reqwest::Client::new();
+    let part = reqwest::multipart::Part::bytes(file_bytes.to_vec())
+        .file_name(filename.to_string())
+        .mime_str("application/octet-stream")?;
+    let form = reqwest::multipart::Form::new().part("file", part);
+
+    let response = client
+        .post(&parse_url)
+        .multipart(form)
+        .send()
+        .await
+        .map_err(|e| anyhow::anyhow!("[doc-processor] request failed: {}", e))?
+        .error_for_status()
+        .map_err(|e| anyhow::anyhow!("[doc-processor] returned error status: {}", e))?;
+
+    let response_bytes = response
+        .bytes()
+        .await
+        .map_err(|e| anyhow::anyhow!("[doc-processor] failed to read response body: {}", e))?;
+
+    let parse_result: DocProcessorResponse = serde_json::from_slice(&response_bytes)
+        .map_err(|e| {
+            let preview = String::from_utf8_lossy(
+                &response_bytes[..response_bytes.len().min(500)],
+            );
+            anyhow::anyhow!(
+                "[doc-processor] failed to deserialize response: {}. Body preview: {}",
+                e, preview
+            )
+        })?;
+
+    Ok((
+        parse_result.markdown,
+        parse_result.metadata.page_count,
+        parse_result.metadata.language,
+        parse_result.metadata.title,
+    ))
+}
+
+#[cfg(feature = "desktop")]
+async fn parse_document(
+    file_bytes: &[u8],
+    filename: &str,
+    file_type: &str,
+    _doc_processor_url: &str,
+) -> anyhow::Result<(String, Option<i32>, Option<String>, Option<String>)> {
+    let result = crate::services::local_doc_processor::parse_local(file_bytes, filename, file_type)?;
+    Ok((
+        result.markdown,
+        result.metadata.page_count,
+        result.metadata.language,
+        result.metadata.title,
+    ))
+}
+
 async fn process_document_inner(
     pool: &DbPool,
     storage: &StorageService,
@@ -96,56 +168,12 @@ async fn process_document_inner(
 
     let (file_path, filename, file_type) = doc;
 
-    // Step 1: Download file from MinIO
     let file_bytes = storage.download(&file_path).await?;
 
-    // Step 2: Call Python doc-processor
-    let parse_url = match file_type.as_str() {
-        "pdf" => format!("{}/api/parse/pdf", doc_processor_url),
-        "docx" => format!("{}/api/parse/docx", doc_processor_url),
-        "txt" | "md" | "html" => format!("{}/api/parse/txt", doc_processor_url),
-        _ => anyhow::bail!("Unsupported file type: {}", file_type),
-    };
+    let (markdown, page_count, language, title) = parse_document(
+        &file_bytes, &filename, &file_type, doc_processor_url,
+    ).await?;
 
-    let client = reqwest::Client::new();
-    let part = reqwest::multipart::Part::bytes(file_bytes.to_vec())
-        .file_name(filename.clone())
-        .mime_str("application/octet-stream")?;
-    let form = reqwest::multipart::Form::new().part("file", part);
-
-    let response = client
-        .post(&parse_url)
-        .multipart(form)
-        .send()
-        .await
-        .map_err(|e| anyhow::anyhow!("[doc-processor] request failed: {}", e))?
-        .error_for_status()
-        .map_err(|e| anyhow::anyhow!("[doc-processor] returned error status: {}", e))?;
-
-    let response_bytes = response
-        .bytes()
-        .await
-        .map_err(|e| anyhow::anyhow!("[doc-processor] failed to read response body: {}", e))?;
-
-    tracing::info!(
-        "doc-processor response for {}: {} bytes",
-        doc_id,
-        response_bytes.len()
-    );
-
-    let parse_result: DocProcessorResponse = serde_json::from_slice(&response_bytes)
-        .map_err(|e| {
-            let preview = String::from_utf8_lossy(
-                &response_bytes[..response_bytes.len().min(500)],
-            );
-            anyhow::anyhow!(
-                "[doc-processor] failed to deserialize response: {}. Body preview: {}",
-                e,
-                preview
-            )
-        })?;
-
-    // Step 3: Update document metadata
     sqlx::query(
         r#"
         UPDATE documents
@@ -154,17 +182,16 @@ async fn process_document_inner(
         WHERE id = $4
         "#,
     )
-    .bind(parse_result.metadata.page_count)
-    .bind(&parse_result.metadata.language)
-    .bind(&parse_result.metadata.title)
+    .bind(page_count)
+    .bind(&language)
+    .bind(&title)
     .bind(doc_id)
     .execute(pool)
     .await?;
 
-    // Step 4: Store Markdown in MinIO
     let md_path = StorageService::markdown_path(&workspace_id, &doc_id);
     storage
-        .upload(&md_path, bytes::Bytes::from(parse_result.markdown.clone()))
+        .upload(&md_path, bytes::Bytes::from(markdown.clone()))
         .await?;
 
     sqlx::query("UPDATE documents SET markdown_file_path = $1 WHERE id = $2")
@@ -173,11 +200,10 @@ async fn process_document_inner(
         .execute(pool)
         .await?;
 
-    // Step 5: Chunk the Markdown
     update_status(pool, doc_id, "chunking", None).await?;
 
     let chunk_config = ChunkConfig::default();
-    let chunks = chunk_markdown(&parse_result.markdown, &chunk_config);
+    let chunks = chunk_markdown(&markdown, &chunk_config);
 
     // Step 6: Insert chunks into DB
     sqlx::query("DELETE FROM document_chunks WHERE document_id = $1")

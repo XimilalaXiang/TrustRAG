@@ -4,6 +4,8 @@ pub mod document;
 pub mod rag;
 pub mod llm;
 pub mod embedding;
+#[cfg(feature = "desktop")]
+pub mod local_doc_processor;
 pub mod reranker;
 pub mod search;
 pub mod review;
