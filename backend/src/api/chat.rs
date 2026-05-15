@@ -24,6 +24,33 @@ use crate::traits::llm_provider::{LlmMessage, LlmProvider, StreamEvent};
 
 use super::AppState;
 
+async fn check_workspace_access(
+    pool: &sqlx::PgPool,
+    ws_id: Uuid,
+    user_id: Uuid,
+) -> Result<(), AppError> {
+    let has_access = sqlx::query_scalar::<_, bool>(
+        r#"
+        SELECT EXISTS(
+            SELECT 1 FROM workspaces
+            WHERE id = $1
+              AND (owner_id = $2
+                   OR id IN (SELECT workspace_id FROM workspace_members WHERE user_id = $2)
+                   OR visibility = 'public')
+        )
+        "#,
+    )
+    .bind(ws_id)
+    .bind(user_id)
+    .fetch_one(pool)
+    .await?;
+
+    if !has_access {
+        return Err(AppError::NotFound("Workspace not found".into()));
+    }
+    Ok(())
+}
+
 pub fn router() -> Router<AppState> {
     Router::new()
         .route(
@@ -134,6 +161,8 @@ async fn create_conversation(
     Path(ws_id): Path<Uuid>,
     Json(req): Json<CreateConversationRequest>,
 ) -> Result<(StatusCode, Json<ConversationResponse>), AppError> {
+    check_workspace_access(&state.pool, ws_id, auth.id).await?;
+
     let scope_json = serde_json::to_value(&req.document_scope).unwrap_or_default();
 
     let conv = sqlx::query_as::<_, ConversationResponse>(
@@ -157,6 +186,8 @@ async fn list_conversations(
     auth: AuthUser,
     Path(ws_id): Path<Uuid>,
 ) -> Result<Json<Vec<ConversationResponse>>, AppError> {
+    check_workspace_access(&state.pool, ws_id, auth.id).await?;
+
     let convs = sqlx::query_as::<_, ConversationResponse>(
         "SELECT id, workspace_id, user_id, title, model_config_id, document_scope, created_at, updated_at
          FROM conversations
@@ -254,6 +285,8 @@ async fn send_message(
     if content.is_empty() {
         return Err(AppError::BadRequest("Message content cannot be empty".into()));
     }
+
+    check_workspace_access(&state.pool, ws_id, auth.id).await?;
 
     tracing::info!(
         user_id = %auth.id,
