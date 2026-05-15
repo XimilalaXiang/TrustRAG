@@ -57,6 +57,52 @@ jobs:
           name: trustrag-windows-x64
           path: apps/client/trustrag-windows-x64.zip
 
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Build macOS app
+        working-directory: apps/client
+        run: flutter build macos --release
+
+      - name: Package macOS build
+        run: |
+          cd apps/client/build/macos/Build/Products/Release
+          tar czf ../../../../../trustrag-macos.tar.gz *.app
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: trustrag-macos
+          path: apps/client/trustrag-macos.tar.gz
+
+  build-ios:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Build iOS (no codesign)
+        working-directory: apps/client
+        run: flutter build ios --release --no-codesign
+
+      - name: Package iOS build
+        run: |
+          cd apps/client/build/ios/iphoneos
+          tar czf ../../../trustrag-ios.tar.gz Runner.app
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: trustrag-ios
+          path: apps/client/trustrag-ios.tar.gz
+
   build-android:
     runs-on: ubuntu-latest
     steps:
@@ -104,7 +150,7 @@ jobs:
           path: apps/client/trustrag-web.tar.gz
 
   release:
-    needs: [build-linux, build-windows, build-android, build-web]
+    needs: [build-linux, build-windows, build-macos, build-ios, build-android, build-web]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
@@ -119,6 +165,8 @@ jobs:
           files: |
             artifacts/trustrag-linux-x64/trustrag-linux-x64.tar.gz
             artifacts/trustrag-windows-x64/trustrag-windows-x64.zip
+            artifacts/trustrag-macos/trustrag-macos.tar.gz
+            artifacts/trustrag-ios/trustrag-ios.tar.gz
             artifacts/trustrag-android/app-release.apk
             artifacts/trustrag-web/trustrag-web.tar.gz
           generate_release_notes: true
