@@ -138,13 +138,18 @@ async fn add_member(
 ) -> Result<(StatusCode, Json<MemberResponse>), AppError> {
     check_owner_or_editor(&state.pool, ws_id, auth.id).await?;
 
+    let email = req.email.trim().to_lowercase();
+    if email.is_empty() || !email.contains('@') {
+        return Err(AppError::BadRequest("Invalid email address".into()));
+    }
+
     let target_user_id = sqlx::query_scalar::<_, Uuid>(
         "SELECT id FROM users WHERE email = $1",
     )
-    .bind(&req.email)
+    .bind(&email)
     .fetch_optional(&state.pool)
     .await?
-    .ok_or_else(|| AppError::NotFound(format!("User with email '{}' not found", req.email)))?;
+    .ok_or_else(|| AppError::NotFound(format!("User with email '{}' not found", email)))?;
 
     let role = req.role.unwrap_or_else(|| "viewer".to_string());
     if !["owner", "editor", "viewer"].contains(&role.as_str()) {

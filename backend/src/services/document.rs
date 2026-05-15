@@ -103,7 +103,7 @@ async fn process_document_inner(
     let parse_url = match file_type.as_str() {
         "pdf" => format!("{}/api/parse/pdf", doc_processor_url),
         "docx" => format!("{}/api/parse/docx", doc_processor_url),
-        "txt" | "md" => format!("{}/api/parse/txt", doc_processor_url),
+        "txt" | "md" | "html" => format!("{}/api/parse/txt", doc_processor_url),
         _ => anyhow::bail!("Unsupported file type: {}", file_type),
     };
 
