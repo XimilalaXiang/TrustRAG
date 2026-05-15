@@ -413,7 +413,7 @@ class _ModelConfigPageState extends ConsumerState<ModelConfigPage>
                 DropdownButtonFormField<String>(
                   initialValue: selectedProvider,
                   decoration: const InputDecoration(labelText: 'Provider'),
-                  items: ['openai', 'local', 'custom']
+                  items: ['openai', 'ollama', 'local', 'custom']
                       .map((p) => DropdownMenuItem(value: p, child: Text(p)))
                       .toList(),
                   onChanged: (v) {
@@ -430,9 +430,11 @@ class _ModelConfigPageState extends ConsumerState<ModelConfigPage>
                     labelText: '模型名称',
                     hintText: selectedProvider == 'openai'
                         ? '如 text-embedding-3-small'
-                        : selectedProvider == 'local'
+                        : selectedProvider == 'ollama'
                             ? '如 nomic-embed-text'
-                            : '如 Qwen3-Embedding-0.6B',
+                            : selectedProvider == 'local'
+                                ? '如 nomic-embed-text'
+                                : '如 Qwen3-Embedding-0.6B',
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -452,7 +454,7 @@ class _ModelConfigPageState extends ConsumerState<ModelConfigPage>
                     labelText: 'API Key',
                     hintText: config != null
                         ? '留空则不修改'
-                        : selectedProvider == 'local'
+                        : (selectedProvider == 'local' || selectedProvider == 'ollama')
                             ? '本地无需填写'
                             : 'sk-...',
                   ),
