@@ -425,7 +425,7 @@ async fn send_message(
             SELECT role, content, created_at FROM messages
             WHERE conversation_id = $1
             ORDER BY created_at DESC
-            OFFSET 1
+            LIMIT -1 OFFSET 1
          ) sub ORDER BY created_at ASC",
     )
     .bind(conv_id.to_string())
