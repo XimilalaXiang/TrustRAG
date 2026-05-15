@@ -30,7 +30,7 @@ struct MemberResponse {
     id: Uuid,
     workspace_id: Uuid,
     user_id: Uuid,
-    username: String,
+    display_name: String,
     role: String,
     created_at: DateTime<Utc>,
 }
@@ -117,7 +117,7 @@ async fn list_members(
 ) -> Result<Json<Vec<MemberResponse>>, AppError> {
     check_workspace_access(&state.pool, ws_id, auth.id).await?;
     let members = sqlx::query_as::<_, MemberResponse>(
-        "SELECT wm.id, wm.workspace_id, wm.user_id, u.username, wm.role, wm.created_at
+        "SELECT wm.id, wm.workspace_id, wm.user_id, u.display_name, wm.role, wm.created_at
          FROM workspace_members wm
          JOIN users u ON wm.user_id = u.id
          WHERE wm.workspace_id = $1
@@ -169,7 +169,7 @@ async fn add_member(
          VALUES ($1, $2, $3, $4)
          ON CONFLICT (workspace_id, user_id) DO UPDATE SET role = $3
          RETURNING id, workspace_id, user_id,
-                   (SELECT username FROM users WHERE id = workspace_members.user_id) as username,
+                   (SELECT display_name FROM users WHERE id = workspace_members.user_id) as display_name,
                    role, created_at",
     )
     .bind(ws_id)
