@@ -48,14 +48,23 @@ jobs:
         working-directory: apps/client
         run: flutter build windows --release
 
-      - name: Package Windows build
+      - name: Create Windows installer (Inno Setup)
         run: |
-          Compress-Archive -Path apps/client/build/windows/x64/runner/Release/* -DestinationPath apps/client/trustrag-windows-x64.zip
+          iscc apps/client/windows/installer.iss
+
+      - name: Package Windows portable
+        run: |
+          Compress-Archive -Path apps/client/build/windows/x64/runner/Release/* -DestinationPath apps/client/trustrag-windows-x64-portable.zip
 
       - uses: actions/upload-artifact@v4
         with:
-          name: trustrag-windows-x64
-          path: apps/client/trustrag-windows-x64.zip
+          name: trustrag-windows-installer
+          path: apps/client/TrustRAG-Setup-Windows-x64.exe
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: trustrag-windows-portable
+          path: apps/client/trustrag-windows-x64-portable.zip
 
   build-macos:
     runs-on: macos-latest
@@ -173,7 +182,8 @@ jobs:
         with:
           files: |
             artifacts/trustrag-linux-x64/trustrag-linux-x64.tar.gz
-            artifacts/trustrag-windows-x64/trustrag-windows-x64.zip
+            artifacts/trustrag-windows-installer/TrustRAG-Setup-Windows-x64.exe
+            artifacts/trustrag-windows-portable/trustrag-windows-x64-portable.zip
             artifacts/trustrag-macos/trustrag-macos.tar.gz
             artifacts/trustrag-ios/trustrag-ios.tar.gz
             artifacts/trustrag-android/app-release.apk
