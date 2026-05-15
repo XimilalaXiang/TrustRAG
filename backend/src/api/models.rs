@@ -184,7 +184,7 @@ async fn create_config(
         .map(|k| encrypt_api_key(k, &state.jwt_secret));
 
     if req.is_default {
-        sqlx::query("UPDATE model_configs SET is_default = false WHERE user_id = $1")
+        sqlx::query("UPDATE model_configs SET is_default = 0 WHERE user_id = $1")
             .bind(auth.id.to_string())
             .execute(&state.pool)
             .await?;
@@ -260,7 +260,7 @@ async fn update_config(
 
     if req.is_default == Some(true) {
         sqlx::query(
-            "UPDATE model_configs SET is_default = false WHERE user_id = $1 AND id != $2",
+            "UPDATE model_configs SET is_default = 0 WHERE user_id = $1 AND id != $2",
         )
         .bind(auth.id.to_string())
         .bind(config_id.to_string())

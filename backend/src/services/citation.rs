@@ -108,7 +108,7 @@ pub async fn store_citations(
             "INSERT INTO citations
                 (message_id, document_id, chunk_id, citation_index, quoted_text,
                  page_number, heading_path, relevance_score, verified)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 1)
              RETURNING id",
         )
         .bind(message_id.to_string())

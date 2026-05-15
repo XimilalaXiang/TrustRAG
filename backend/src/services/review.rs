@@ -66,12 +66,12 @@ pub async fn create_review(
     let record = parse_review_row(row);
 
     if input.status == "approved" {
-        sqlx::query("UPDATE citations SET verified = true WHERE id = $1")
+        sqlx::query("UPDATE citations SET verified = 1 WHERE id = $1")
             .bind(citation_id.to_string())
             .execute(pool)
             .await?;
     } else if input.status == "rejected" || input.status == "flagged" {
-        sqlx::query("UPDATE citations SET verified = false WHERE id = $1")
+        sqlx::query("UPDATE citations SET verified = 0 WHERE id = $1")
             .bind(citation_id.to_string())
             .execute(pool)
             .await?;

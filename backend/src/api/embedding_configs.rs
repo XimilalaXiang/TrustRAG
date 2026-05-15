@@ -151,7 +151,7 @@ async fn create_config(
         .map(|k| encrypt_api_key(k, &state.jwt_secret));
 
     if req.is_default {
-        sqlx::query("UPDATE embedding_configs SET is_default = false WHERE user_id = $1")
+        sqlx::query("UPDATE embedding_configs SET is_default = 0 WHERE user_id = $1")
             .bind(auth.id.to_string())
             .execute(&state.pool)
             .await?;
@@ -232,7 +232,7 @@ async fn update_config(
 
     if req.is_default == Some(true) {
         sqlx::query(
-            "UPDATE embedding_configs SET is_default = false WHERE user_id = $1 AND id != $2",
+            "UPDATE embedding_configs SET is_default = 0 WHERE user_id = $1 AND id != $2",
         )
         .bind(auth.id.to_string())
         .bind(config_id.to_string())
@@ -268,7 +268,7 @@ async fn delete_config(
     Path(config_id): Path<Uuid>,
 ) -> Result<StatusCode, AppError> {
     let was_default: Option<i32> = sqlx::query_scalar(
-        "SELECT CASE WHEN is_default = true THEN 1 ELSE 0 END FROM embedding_configs WHERE id = $1 AND user_id = $2",
+        "SELECT CASE WHEN is_default = 1 THEN 1 ELSE 0 END FROM embedding_configs WHERE id = $1 AND user_id = $2",
     )
     .bind(config_id.to_string())
     .bind(auth.id.to_string())
@@ -367,7 +367,7 @@ async fn reload_embedding_provider(state: &AppState) {
     let row = sqlx::query_as::<_, (String, Option<String>, Option<String>, String, i32)>(
         "SELECT provider, api_base_url, api_key_enc, model_name, dimensions
          FROM embedding_configs
-         WHERE is_default = true
+         WHERE is_default = 1
          ORDER BY updated_at DESC
          LIMIT 1",
     )

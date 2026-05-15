@@ -393,7 +393,7 @@ async fn send_message(
             // Try user's default model
             sqlx::query_as::<_, (String, String, Option<String>, String, Option<f32>, Option<i32>)>(
                 "SELECT provider, api_base_url, api_key_enc, model_name, temperature, max_tokens
-                 FROM model_configs WHERE user_id = $1 AND is_default = true LIMIT 1",
+                 FROM model_configs WHERE user_id = $1 AND is_default = 1 LIMIT 1",
             )
             .bind(auth.id.to_string())
             .fetch_optional(&state.pool)
