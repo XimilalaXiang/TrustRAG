@@ -326,9 +326,18 @@
 - [ ] 同义词扩展
 - 参考：`docs/rag-pipeline.md` → 阶段 2
 
-#### 🔲 P2.4 桌面端
-- [ ] Windows + Linux 构建
-- [ ] 本地文件系统集成
+#### ✅ P2.4 桌面端本地化架构
+- [x] Rust 后端 feature flags: postgres (server) / desktop (SQLite)
+- [x] DbPool 类型别名，自动切换 PgPool / SqlitePool
+- [x] SQLite schema + FTS5 全文搜索 + BLOB embedding 存储
+- [x] 向量搜索：brute-force 余弦相似度（桌面模式）
+- [x] opendal Fs backend 本地文件存储
+- [x] Redis 设为 optional
+- [x] 内嵌文档处理器（txt/md/html Rust 原生解析）
+- [x] BackendManager（Flutter 进程管理、端口检测）
+- [x] DesktopAutoSetup（首次启动自动创建本地用户）
+- [x] CI 交叉编译 Rust 后端并打包到桌面安装包
+- [x] Windows Inno Setup / macOS .app / Linux tar.gz 打包
 
 #### 🔲 P2.5 移动端 (Android)
 - [ ] 响应式适配
