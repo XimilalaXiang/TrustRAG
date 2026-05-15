@@ -43,9 +43,9 @@ async fn ensure_data_dir(config: &config::AppConfig) -> anyhow::Result<()> {
 
 #[cfg(feature = "desktop")]
 async fn run_sqlite_migrations(pool: &sqlx::SqlitePool) -> anyhow::Result<()> {
-    sqlx::query(include_str!("../migrations_sqlite/init.sql"))
-        .execute(pool)
-        .await?;
+    use sqlx::Executor;
+    let sql = include_str!("../migrations_sqlite/init.sql");
+    pool.execute(sqlx::raw_sql(sql)).await?;
     tracing::info!("SQLite schema initialized");
     Ok(())
 }
