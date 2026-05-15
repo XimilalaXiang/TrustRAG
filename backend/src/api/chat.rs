@@ -30,15 +30,13 @@ async fn check_workspace_access(
     ws_id: Uuid,
     user_id: Uuid,
 ) -> Result<(), AppError> {
-    let has_access = sqlx::query_scalar::<_, bool>(
+    let count: i32 = sqlx::query_scalar(
         r#"
-        SELECT EXISTS(
-            SELECT 1 FROM workspaces
-            WHERE id = $1
-              AND (owner_id = $2
-                   OR id IN (SELECT workspace_id FROM workspace_members WHERE user_id = $2)
-                   OR visibility = 'public')
-        )
+        SELECT COUNT(*) FROM workspaces
+        WHERE id = $1
+          AND (owner_id = $2
+               OR id IN (SELECT workspace_id FROM workspace_members WHERE user_id = $2)
+               OR visibility = 'public')
         "#,
     )
     .bind(ws_id.to_string())
@@ -46,7 +44,7 @@ async fn check_workspace_access(
     .fetch_one(pool)
     .await?;
 
-    if !has_access {
+    if count == 0 {
         return Err(AppError::NotFound("Workspace not found".into()));
     }
     Ok(())
@@ -78,7 +76,7 @@ pub struct CreateConversationRequest {
     pub document_scope: Vec<Uuid>,
 }
 
-#[derive(Serialize, sqlx::FromRow)]
+#[derive(Serialize, Clone)]
 pub struct ConversationResponse {
     pub id: Uuid,
     pub workspace_id: Uuid,
@@ -86,11 +84,32 @@ pub struct ConversationResponse {
     pub title: Option<String>,
     pub model_config_id: Option<Uuid>,
     pub document_scope: serde_json::Value,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
+    pub created_at: String,
+    pub updated_at: String,
 }
 
-#[derive(Serialize, sqlx::FromRow)]
+type ConvRow = (String, String, String, Option<String>, Option<String>, Option<String>, String, String);
+
+fn parse_conv_row(r: ConvRow) -> Result<ConversationResponse, AppError> {
+    use crate::db::compat;
+    let scope: serde_json::Value = r.5.as_deref()
+        .and_then(|s| serde_json::from_str(s).ok())
+        .unwrap_or(serde_json::json!([]));
+    Ok(ConversationResponse {
+        id: compat::parse_uuid(&r.0).map_err(|e| AppError::Internal(e.into()))?,
+        workspace_id: compat::parse_uuid(&r.1).map_err(|e| AppError::Internal(e.into()))?,
+        user_id: compat::parse_uuid(&r.2).map_err(|e| AppError::Internal(e.into()))?,
+        title: r.3,
+        model_config_id: r.4.as_deref().and_then(|s| compat::parse_uuid(s).ok()),
+        document_scope: scope,
+        created_at: r.6,
+        updated_at: r.7,
+    })
+}
+
+const CONV_SELECT: &str = "id, workspace_id, user_id, title, model_config_id, CAST(document_scope AS TEXT), CAST(created_at AS TEXT), CAST(updated_at AS TEXT)";
+
+#[derive(Serialize, Clone)]
 pub struct MessageResponse {
     pub id: Uuid,
     pub conversation_id: Uuid,
@@ -100,8 +119,27 @@ pub struct MessageResponse {
     pub prompt_tokens: Option<i32>,
     pub completion_tokens: Option<i32>,
     pub latency_ms: Option<i32>,
-    pub created_at: DateTime<Utc>,
+    pub created_at: String,
 }
+
+type MsgRow = (String, String, String, String, Option<String>, Option<i32>, Option<i32>, Option<i32>, String);
+
+fn parse_msg_row(r: MsgRow) -> Result<MessageResponse, AppError> {
+    use crate::db::compat;
+    Ok(MessageResponse {
+        id: compat::parse_uuid(&r.0).map_err(|e| AppError::Internal(e.into()))?,
+        conversation_id: compat::parse_uuid(&r.1).map_err(|e| AppError::Internal(e.into()))?,
+        role: r.2,
+        content: r.3,
+        model_name: r.4,
+        prompt_tokens: r.5,
+        completion_tokens: r.6,
+        latency_ms: r.7,
+        created_at: r.8,
+    })
+}
+
+const MSG_SELECT: &str = "id, conversation_id, role, content, model_name, prompt_tokens, completion_tokens, latency_ms, CAST(created_at AS TEXT)";
 
 #[derive(Deserialize)]
 pub struct SendMessageRequest {
@@ -166,20 +204,20 @@ async fn create_conversation(
 
     let scope_json = serde_json::to_value(&req.document_scope).unwrap_or_default();
 
-    let conv = sqlx::query_as::<_, ConversationResponse>(
-        "INSERT INTO conversations (workspace_id, user_id, title, model_config_id, document_scope)
+    let row = sqlx::query_as::<_, ConvRow>(
+        &format!("INSERT INTO conversations (workspace_id, user_id, title, model_config_id, document_scope)
          VALUES ($1, $2, $3, $4, $5)
-         RETURNING id, workspace_id, user_id, title, model_config_id, document_scope, created_at, updated_at",
+         RETURNING {CONV_SELECT}"),
     )
     .bind(ws_id.to_string())
     .bind(auth.id.to_string())
     .bind(&req.title)
-    .bind(req.model_config_id)
-    .bind(&scope_json)
+    .bind(req.model_config_id.map(|u| u.to_string()))
+    .bind(scope_json.to_string())
     .fetch_one(&state.pool)
     .await?;
 
-    Ok((StatusCode::CREATED, Json(conv)))
+    Ok((StatusCode::CREATED, Json(parse_conv_row(row)?)))
 }
 
 async fn list_conversations(
@@ -189,17 +227,20 @@ async fn list_conversations(
 ) -> Result<Json<Vec<ConversationResponse>>, AppError> {
     check_workspace_access(&state.pool, ws_id, auth.id).await?;
 
-    let convs = sqlx::query_as::<_, ConversationResponse>(
-        "SELECT id, workspace_id, user_id, title, model_config_id, document_scope, created_at, updated_at
+    let rows = sqlx::query_as::<_, ConvRow>(
+        &format!("SELECT {CONV_SELECT}
          FROM conversations
          WHERE workspace_id = $1 AND user_id = $2
-         ORDER BY updated_at DESC",
+         ORDER BY updated_at DESC"),
     )
     .bind(ws_id.to_string())
     .bind(auth.id.to_string())
     .fetch_all(&state.pool)
     .await?;
 
+    let convs: Vec<ConversationResponse> = rows.into_iter()
+        .map(parse_conv_row)
+        .collect::<Result<_, _>>()?;
     Ok(Json(convs))
 }
 
@@ -208,10 +249,10 @@ async fn get_conversation(
     auth: AuthUser,
     Path((ws_id, conv_id)): Path<(Uuid, Uuid)>,
 ) -> Result<Json<ConversationResponse>, AppError> {
-    let conv = sqlx::query_as::<_, ConversationResponse>(
-        "SELECT id, workspace_id, user_id, title, model_config_id, document_scope, created_at, updated_at
+    let row = sqlx::query_as::<_, ConvRow>(
+        &format!("SELECT {CONV_SELECT}
          FROM conversations
-         WHERE id = $1 AND workspace_id = $2 AND user_id = $3",
+         WHERE id = $1 AND workspace_id = $2 AND user_id = $3"),
     )
     .bind(conv_id.to_string())
     .bind(ws_id.to_string())
@@ -220,7 +261,7 @@ async fn get_conversation(
     .await?
     .ok_or_else(|| AppError::NotFound("Conversation not found".into()))?;
 
-    Ok(Json(conv))
+    Ok(Json(parse_conv_row(row)?))
 }
 
 async fn delete_conversation(
@@ -260,17 +301,19 @@ async fn list_messages(
     .await?
     .ok_or_else(|| AppError::NotFound("Conversation not found".into()))?;
 
-    let msgs = sqlx::query_as::<_, MessageResponse>(
-        "SELECT id, conversation_id, role, content, model_name, prompt_tokens,
-                completion_tokens, latency_ms, created_at
+    let rows = sqlx::query_as::<_, MsgRow>(
+        &format!("SELECT {MSG_SELECT}
          FROM messages
          WHERE conversation_id = $1
-         ORDER BY created_at ASC",
+         ORDER BY created_at ASC"),
     )
     .bind(conv_id.to_string())
     .fetch_all(&state.pool)
     .await?;
 
+    let msgs: Vec<MessageResponse> = rows.into_iter()
+        .map(parse_msg_row)
+        .collect::<Result<_, _>>()?;
     Ok(Json(msgs))
 }
 
@@ -297,8 +340,8 @@ async fn send_message(
         "Chat message received"
     );
 
-    let conv = sqlx::query_as::<_, (Option<Uuid>, serde_json::Value)>(
-        "SELECT model_config_id, document_scope
+    let conv = sqlx::query_as::<_, (Option<String>, Option<String>)>(
+        "SELECT model_config_id, CAST(document_scope AS TEXT)
          FROM conversations WHERE id = $1 AND workspace_id = $2 AND user_id = $3",
     )
     .bind(conv_id.to_string())
@@ -308,7 +351,11 @@ async fn send_message(
     .await?
     .ok_or_else(|| AppError::NotFound("Conversation not found".into()))?;
 
-    let (conv_model_config_id, conv_doc_scope) = conv;
+    let conv_model_config_id: Option<Uuid> = conv.0.as_deref()
+        .and_then(|s| crate::db::compat::parse_uuid(s).ok());
+    let conv_doc_scope: serde_json::Value = conv.1.as_deref()
+        .and_then(|s| serde_json::from_str(s).ok())
+        .unwrap_or(serde_json::json!([]));
 
     // Save user message and touch conversation updated_at
     sqlx::query(
@@ -319,10 +366,13 @@ async fn send_message(
     .execute(&state.pool)
     .await?;
 
-    sqlx::query("UPDATE conversations SET updated_at = NOW() WHERE id = $1")
-        .bind(conv_id.to_string())
-        .execute(&state.pool)
-        .await?;
+    sqlx::query(&format!(
+        "UPDATE conversations SET updated_at = {} WHERE id = $1",
+        crate::db::compat::current_timestamp_sql()
+    ))
+    .bind(conv_id.to_string())
+    .execute(&state.pool)
+    .await?;
 
     // Determine model config
     let model_config_id = req.model_config_id.or(conv_model_config_id);
@@ -334,7 +384,7 @@ async fn send_message(
                 "SELECT provider, api_base_url, api_key_enc, model_name, temperature, max_tokens
                  FROM model_configs WHERE id = $1 AND user_id = $2",
             )
-            .bind(mc_id)
+            .bind(mc_id.to_string())
             .bind(auth.id.to_string())
             .fetch_optional(&state.pool)
             .await?
@@ -435,10 +485,10 @@ async fn send_message(
         let latency = start.elapsed().as_millis() as i32;
 
         // Save assistant message
-        let msg = sqlx::query_as::<_, MessageResponse>(
-            "INSERT INTO messages (conversation_id, role, content, model_name, prompt_tokens, completion_tokens, latency_ms)
+        let msg_row = sqlx::query_as::<_, MsgRow>(
+            &format!("INSERT INTO messages (conversation_id, role, content, model_name, prompt_tokens, completion_tokens, latency_ms)
              VALUES ($1, 'assistant', $2, $3, $4, $5, $6)
-             RETURNING id, conversation_id, role, content, model_name, prompt_tokens, completion_tokens, latency_ms, created_at",
+             RETURNING {MSG_SELECT}"),
         )
         .bind(conv_id.to_string())
         .bind(&result.answer)
@@ -448,6 +498,7 @@ async fn send_message(
         .bind(latency)
         .fetch_one(&state.pool)
         .await?;
+        let msg = parse_msg_row(msg_row)?;
 
         if !result.sources.is_empty() {
             if let Err(e) = citation::process_citations(

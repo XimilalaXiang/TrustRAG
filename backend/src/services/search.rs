@@ -35,7 +35,7 @@ impl Default for SearchConfig {
     }
 }
 
-#[derive(Debug, Clone, Serialize, sqlx::FromRow)]
+#[derive(Debug, Clone, Serialize)]
 pub struct SearchResult {
     pub chunk_id: Uuid,
     pub document_id: Uuid,

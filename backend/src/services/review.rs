@@ -4,7 +4,7 @@ use uuid::Uuid;
 
 use crate::db::DbPool;
 
-#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReviewRecord {
     pub id: Uuid,
     pub citation_id: Uuid,
@@ -12,8 +12,23 @@ pub struct ReviewRecord {
     pub status: String,
     pub comment: Option<String>,
     pub corrected_text: Option<String>,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+type ReviewRow = (String, String, String, String, Option<String>, Option<String>, String, String);
+
+fn parse_review_row(r: ReviewRow) -> ReviewRecord {
+    ReviewRecord {
+        id: r.0.parse().unwrap_or_default(),
+        citation_id: r.1.parse().unwrap_or_default(),
+        reviewer_id: r.2.parse().unwrap_or_default(),
+        status: r.3,
+        comment: r.4,
+        corrected_text: r.5,
+        created_at: r.6,
+        updated_at: r.7,
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -34,20 +49,21 @@ pub async fn create_review(
         anyhow::bail!("Invalid review status: {}", input.status);
     }
 
-    let record = sqlx::query_as::<_, ReviewRecord>(
+    let row = sqlx::query_as::<_, ReviewRow>(
         r#"
         INSERT INTO review_records (citation_id, reviewer_id, status, comment, corrected_text)
         VALUES ($1, $2, $3, $4, $5)
-        RETURNING id, citation_id, reviewer_id, status, comment, corrected_text, created_at, updated_at
+        RETURNING id, citation_id, reviewer_id, status, comment, corrected_text, CAST(created_at AS TEXT), CAST(updated_at AS TEXT)
         "#,
     )
     .bind(citation_id.to_string())
-    .bind(reviewer_id)
+    .bind(reviewer_id.to_string())
     .bind(&input.status)
     .bind(&input.comment)
     .bind(&input.corrected_text)
     .fetch_one(pool)
     .await?;
+    let record = parse_review_row(row);
 
     if input.status == "approved" {
         sqlx::query("UPDATE citations SET verified = true WHERE id = $1")
@@ -68,9 +84,9 @@ pub async fn list_reviews_for_citation(
     pool: &DbPool,
     citation_id: Uuid,
 ) -> anyhow::Result<Vec<ReviewRecord>> {
-    let records = sqlx::query_as::<_, ReviewRecord>(
+    let rows = sqlx::query_as::<_, ReviewRow>(
         r#"
-        SELECT id, citation_id, reviewer_id, status, comment, corrected_text, created_at, updated_at
+        SELECT id, citation_id, reviewer_id, status, comment, corrected_text, CAST(created_at AS TEXT), CAST(updated_at AS TEXT)
         FROM review_records
         WHERE citation_id = $1
         ORDER BY created_at DESC
@@ -80,7 +96,7 @@ pub async fn list_reviews_for_citation(
     .fetch_all(pool)
     .await?;
 
-    Ok(records)
+    Ok(rows.into_iter().map(parse_review_row).collect())
 }
 
 #[derive(Debug, Serialize)]
@@ -111,12 +127,16 @@ pub async fn get_review_stats_for_conversation(
     let reviewed = sqlx::query_as::<_, (String, i64)>(
         r#"
         SELECT latest.status, COUNT(*) FROM (
-            SELECT DISTINCT ON (rr.citation_id) rr.status
+            SELECT rr.status
             FROM review_records rr
             JOIN citations c ON rr.citation_id = c.id
             JOIN messages m ON c.message_id = m.id
             WHERE m.conversation_id = $1
-            ORDER BY rr.citation_id, rr.created_at DESC
+              AND rr.created_at = (
+                  SELECT MAX(rr2.created_at) FROM review_records rr2
+                  WHERE rr2.citation_id = rr.citation_id
+              )
+            GROUP BY rr.citation_id, rr.status
         ) latest
         GROUP BY latest.status
         "#,

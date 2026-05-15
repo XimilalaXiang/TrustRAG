@@ -267,8 +267,8 @@ async fn delete_config(
     auth: AuthUser,
     Path(config_id): Path<Uuid>,
 ) -> Result<StatusCode, AppError> {
-    let was_default = sqlx::query_scalar::<_, bool>(
-        "SELECT COALESCE(is_default, false) FROM embedding_configs WHERE id = $1 AND user_id = $2",
+    let was_default: Option<i32> = sqlx::query_scalar(
+        "SELECT CASE WHEN is_default = true THEN 1 ELSE 0 END FROM embedding_configs WHERE id = $1 AND user_id = $2",
     )
     .bind(config_id.to_string())
     .bind(auth.id.to_string())
@@ -285,7 +285,7 @@ async fn delete_config(
         return Err(AppError::NotFound("Embedding config not found".into()));
     }
 
-    if was_default == Some(true) {
+    if was_default == Some(1) {
         reload_embedding_provider(&state).await;
     }
 

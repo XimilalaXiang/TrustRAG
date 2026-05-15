@@ -66,15 +66,15 @@ async fn check_owner_or_editor(
         }
     }
 
-    let is_creator = sqlx::query_scalar::<_, bool>(
-        "SELECT EXISTS(SELECT 1 FROM workspaces WHERE id = $1 AND owner_id = $2)",
+    let creator_count: i32 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM workspaces WHERE id = $1 AND owner_id = $2",
     )
     .bind(ws_id.to_string())
     .bind(user_id.to_string())
     .fetch_one(pool)
     .await?;
 
-    if is_creator {
+    if creator_count > 0 {
         return Ok("owner".to_string());
     }
 
@@ -88,15 +88,13 @@ async fn check_workspace_access(
     ws_id: Uuid,
     user_id: Uuid,
 ) -> Result<(), AppError> {
-    let has_access = sqlx::query_scalar::<_, bool>(
+    let access_count: i32 = sqlx::query_scalar(
         r#"
-        SELECT EXISTS(
-            SELECT 1 FROM workspaces
-            WHERE id = $1
-              AND (owner_id = $2
-                   OR id IN (SELECT workspace_id FROM workspace_members WHERE user_id = $2)
-                   OR visibility = 'public')
-        )
+        SELECT COUNT(*) FROM workspaces
+        WHERE id = $1
+          AND (owner_id = $2
+               OR id IN (SELECT workspace_id FROM workspace_members WHERE user_id = $2)
+               OR visibility = 'public')
         "#,
     )
     .bind(ws_id.to_string())
@@ -104,7 +102,7 @@ async fn check_workspace_access(
     .fetch_one(pool)
     .await?;
 
-    if !has_access {
+    if access_count == 0 {
         return Err(AppError::NotFound("Workspace not found".into()));
     }
     Ok(())

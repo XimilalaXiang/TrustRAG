@@ -35,15 +35,13 @@ async fn search(
         return Err(AppError::BadRequest("Query must not be empty".into()));
     }
 
-    let has_access = sqlx::query_scalar::<_, bool>(
+    let access_count: i32 = sqlx::query_scalar(
         r#"
-        SELECT EXISTS(
-            SELECT 1 FROM workspaces
-            WHERE id = $1
-              AND (owner_id = $2
-                   OR id IN (SELECT workspace_id FROM workspace_members WHERE user_id = $2)
-                   OR visibility = 'public')
-        )
+        SELECT COUNT(*) FROM workspaces
+        WHERE id = $1
+          AND (owner_id = $2
+               OR id IN (SELECT workspace_id FROM workspace_members WHERE user_id = $2)
+               OR visibility = 'public')
         "#,
     )
     .bind(ws_id.to_string())
@@ -51,7 +49,7 @@ async fn search(
     .fetch_one(&state.pool)
     .await?;
 
-    if !has_access {
+    if access_count == 0 {
         return Err(AppError::NotFound("Workspace not found".into()));
     }
 

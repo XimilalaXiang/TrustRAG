@@ -106,15 +106,13 @@ async fn check_workspace_access(
     ws_id: Uuid,
     user_id: Uuid,
 ) -> Result<(), AppError> {
-    let has_access = sqlx::query_scalar::<_, bool>(
+    let access_count: i32 = sqlx::query_scalar(
         r#"
-        SELECT EXISTS(
-            SELECT 1 FROM workspaces
-            WHERE id = $1
-              AND (owner_id = $2
-                   OR id IN (SELECT workspace_id FROM workspace_members WHERE user_id = $2)
-                   OR visibility = 'public')
-        )
+        SELECT COUNT(*) FROM workspaces
+        WHERE id = $1
+          AND (owner_id = $2
+               OR id IN (SELECT workspace_id FROM workspace_members WHERE user_id = $2)
+               OR visibility = 'public')
         "#,
     )
     .bind(ws_id.to_string())
@@ -122,7 +120,7 @@ async fn check_workspace_access(
     .fetch_one(pool)
     .await?;
 
-    if !has_access {
+    if access_count == 0 {
         return Err(AppError::NotFound("Workspace not found".into()));
     }
     Ok(())
@@ -485,15 +483,16 @@ async fn list_chunks(
 ) -> Result<Json<PaginatedChunks>, AppError> {
     check_workspace_access(&state.pool, ws_id, auth.id).await?;
 
-    sqlx::query_scalar::<_, bool>(
-        "SELECT EXISTS(SELECT 1 FROM documents WHERE id = $1 AND workspace_id = $2)",
+    let doc_count: i32 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM documents WHERE id = $1 AND workspace_id = $2",
     )
     .bind(doc_id.to_string())
     .bind(ws_id.to_string())
     .fetch_one(&state.pool)
-    .await?
-    .then_some(())
-    .ok_or_else(|| AppError::NotFound("Document not found".into()))?;
+    .await?;
+    if doc_count == 0 {
+        return Err(AppError::NotFound("Document not found".into()));
+    }
 
     let page = params.page.unwrap_or(1).max(1);
     let per_page = params.per_page.unwrap_or(50).clamp(1, 200);

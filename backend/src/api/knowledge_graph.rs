@@ -21,17 +21,16 @@ pub fn router() -> Router<AppState> {
         )
 }
 
-#[derive(Serialize, sqlx::FromRow)]
+#[derive(Serialize)]
 struct EntityRow {
     id: Uuid,
     name: String,
     entity_type: String,
     document_id: Option<Uuid>,
     metadata: serde_json::Value,
-    created_at: DateTime<Utc>,
+    created_at: String,
 }
 
-#[derive(Serialize, sqlx::FromRow)]
 struct RelationRow {
     id: Uuid,
     source_entity_id: Uuid,
@@ -67,15 +66,13 @@ async fn check_workspace_access(
     ws_id: Uuid,
     user_id: Uuid,
 ) -> Result<(), AppError> {
-    let has_access = sqlx::query_scalar::<_, bool>(
+    let access_count: i32 = sqlx::query_scalar(
         r#"
-        SELECT EXISTS(
-            SELECT 1 FROM workspaces
-            WHERE id = $1
-              AND (owner_id = $2
-                   OR id IN (SELECT workspace_id FROM workspace_members WHERE user_id = $2)
-                   OR visibility = 'public')
-        )
+        SELECT COUNT(*) FROM workspaces
+        WHERE id = $1
+          AND (owner_id = $2
+               OR id IN (SELECT workspace_id FROM workspace_members WHERE user_id = $2)
+               OR visibility = 'public')
         "#,
     )
     .bind(ws_id.to_string())
@@ -83,7 +80,7 @@ async fn check_workspace_access(
     .fetch_one(pool)
     .await?;
 
-    if !has_access {
+    if access_count == 0 {
         return Err(AppError::NotFound("Workspace not found".into()));
     }
     Ok(())
@@ -97,21 +94,45 @@ async fn get_graph(
     check_workspace_access(&state.pool, ws_id, auth.id).await?;
     tracing::info!(workspace_id = %ws_id, "Fetching knowledge graph");
 
-    let entities = sqlx::query_as::<_, EntityRow>(
-        "SELECT id, name, entity_type, document_id, metadata, created_at
+    let entity_rows = sqlx::query_as::<_, (String, String, String, Option<String>, Option<String>, String)>(
+        "SELECT id, name, entity_type, document_id, CAST(metadata AS TEXT), CAST(created_at AS TEXT)
          FROM entities WHERE workspace_id = $1 ORDER BY name",
     )
     .bind(ws_id.to_string())
     .fetch_all(&state.pool)
     .await?;
 
-    let relations = sqlx::query_as::<_, RelationRow>(
+    let entities: Vec<EntityRow> = entity_rows.into_iter().map(|r| {
+        let metadata: serde_json::Value = r.4.as_deref()
+            .and_then(|s| serde_json::from_str(s).ok())
+            .unwrap_or(serde_json::json!({}));
+        EntityRow {
+            id: r.0.parse().unwrap_or_default(),
+            name: r.1,
+            entity_type: r.2,
+            document_id: r.3.as_deref().and_then(|s| s.parse().ok()),
+            metadata,
+            created_at: r.5,
+        }
+    }).collect();
+
+    let relation_rows = sqlx::query_as::<_, (String, String, String, String, f64)>(
         "SELECT id, source_entity_id, target_entity_id, relation_type, weight
          FROM entity_relations WHERE workspace_id = $1",
     )
     .bind(ws_id.to_string())
     .fetch_all(&state.pool)
     .await?;
+
+    let relations: Vec<RelationRow> = relation_rows.into_iter().map(|r| {
+        RelationRow {
+            id: r.0.parse().unwrap_or_default(),
+            source_entity_id: r.1.parse().unwrap_or_default(),
+            target_entity_id: r.2.parse().unwrap_or_default(),
+            relation_type: r.3,
+            weight: r.4,
+        }
+    }).collect();
 
     let nodes: Vec<GraphNode> = entities
         .iter()
@@ -142,13 +163,27 @@ async fn list_entities(
     Path(ws_id): Path<Uuid>,
 ) -> Result<Json<Vec<EntityRow>>, AppError> {
     check_workspace_access(&state.pool, ws_id, auth.id).await?;
-    let entities = sqlx::query_as::<_, EntityRow>(
-        "SELECT id, name, entity_type, document_id, metadata, created_at
+    let rows = sqlx::query_as::<_, (String, String, String, Option<String>, Option<String>, String)>(
+        "SELECT id, name, entity_type, document_id, CAST(metadata AS TEXT), CAST(created_at AS TEXT)
          FROM entities WHERE workspace_id = $1 ORDER BY created_at DESC LIMIT 200",
     )
     .bind(ws_id.to_string())
     .fetch_all(&state.pool)
     .await?;
+
+    let entities: Vec<EntityRow> = rows.into_iter().map(|r| {
+        let metadata: serde_json::Value = r.4.as_deref()
+            .and_then(|s| serde_json::from_str(s).ok())
+            .unwrap_or(serde_json::json!({}));
+        EntityRow {
+            id: r.0.parse().unwrap_or_default(),
+            name: r.1,
+            entity_type: r.2,
+            document_id: r.3.as_deref().and_then(|s| s.parse().ok()),
+            metadata,
+            created_at: r.5,
+        }
+    }).collect();
 
     Ok(Json(entities))
 }
