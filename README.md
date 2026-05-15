@@ -15,6 +15,7 @@ English | [简体中文](./README_ZH.md) | [繁體中文](./README_TW.md) | [日
 [![Platform](https://img.shields.io/badge/Linux-FCC624?logo=linux&logoColor=black)](https://github.com/XimilalaXiang/TrustRAG/releases)
 [![Platform](https://img.shields.io/badge/Android-3DDC84?logo=android&logoColor=white)](https://github.com/XimilalaXiang/TrustRAG/releases)
 [![Platform](https://img.shields.io/badge/iOS-000000?logo=ios&logoColor=white)](https://github.com/XimilalaXiang/TrustRAG/releases)
+[![Docs](https://img.shields.io/badge/Docs-VitePress-646CFF?logo=vitepress&logoColor=white)](https://ximilalaxiang.github.io/TrustRAG/)
 [![Downloads](https://img.shields.io/github/downloads/XimilalaXiang/TrustRAG/total?label=Downloads&color=orange)](https://github.com/XimilalaXiang/TrustRAG/releases)
 [![Stars](https://img.shields.io/github/stars/XimilalaXiang/TrustRAG?style=social)](https://github.com/XimilalaXiang/TrustRAG)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/XimilalaXiang/TrustRAG)
@@ -23,7 +24,7 @@ English | [简体中文](./README_ZH.md) | [繁體中文](./README_TW.md) | [日
 
 <div align="center">
 
-⬇️ **[Download](https://github.com/XimilalaXiang/TrustRAG/releases/latest)** · 📋 **[Changelog](./CHANGELOG.md)**
+⬇️ **[Download](https://github.com/XimilalaXiang/TrustRAG/releases/latest)** · 📖 **[Documentation](https://ximilalaxiang.github.io/TrustRAG/)** · 📋 **[Changelog](./CHANGELOG.md)**
 
 </div>
 

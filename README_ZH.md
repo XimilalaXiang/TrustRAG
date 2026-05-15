@@ -18,7 +18,7 @@
 
 <div align="center">
 
-⬇️ **[下载](https://github.com/XimilalaXiang/TrustRAG/releases/latest)** · 📋 **[更新日志](./CHANGELOG.md)**
+⬇️ **[下载](https://github.com/XimilalaXiang/TrustRAG/releases/latest)** · 📖 **[文档站](https://ximilalaxiang.github.io/TrustRAG/zh/)** · 📋 **[更新日志](./CHANGELOG.md)**
 
 </div>
 
