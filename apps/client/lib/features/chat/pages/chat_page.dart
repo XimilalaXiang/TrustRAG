@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart' show MarkdownBody, MarkdownStyleSheet;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -14,6 +15,17 @@ import '../../dashboard/providers/workspace_provider.dart';
 import '../../reader/pages/pdf_viewer_page.dart';
 import '../providers/chat_provider.dart';
 import '../providers/review_provider.dart';
+
+enum SendMode { enter, ctrlEnter }
+
+final sendModeProvider = StateProvider<SendMode>((ref) => SendMode.enter);
+
+Future<void> _initSendMode(WidgetRef ref) async {
+  final prefs = await SharedPreferences.getInstance();
+  final mode = prefs.getString('send_mode') ?? 'enter';
+  ref.read(sendModeProvider.notifier).state =
+      mode == 'ctrlEnter' ? SendMode.ctrlEnter : SendMode.enter;
+}
 
 class ChatPage extends ConsumerStatefulWidget {
   const ChatPage({super.key});
@@ -33,6 +45,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   @override
   void initState() {
     super.initState();
+    _initSendMode(ref);
     final ws = ref.read(selectedWorkspaceProvider);
     if (ws != null) {
       ref.read(conversationProvider.notifier).loadConversations(ws.id);
@@ -319,6 +332,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
         Expanded(
           child: Column(
             children: [
+              _buildWorkspaceBar(ws),
               Expanded(
                 child: messages.isEmpty && _streamingContent.isEmpty
                     ? _buildEmptyChat()
@@ -329,6 +343,80 @@ class _ChatPageState extends ConsumerState<ChatPage> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildWorkspaceBar(dynamic ws) {
+    final workspaces = ref.watch(workspaceProvider);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+        border: Border(
+          bottom: BorderSide(color: Theme.of(context).colorScheme.outline, width: 1),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.workspaces_outlined, size: 16, color: Theme.of(context).colorScheme.primary),
+          const SizedBox(width: 8),
+          Text(
+            ws.name,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: Theme.of(context).colorScheme.onSurface,
+            ),
+          ),
+          const SizedBox(width: 4),
+          workspaces.when(
+            data: (list) {
+              if (list.length <= 1) return const SizedBox.shrink();
+              return PopupMenuButton<String>(
+                tooltip: '切换工作区',
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                icon: Icon(Icons.unfold_more, size: 16, color: Colors.grey.shade600),
+                onSelected: (id) {
+                  final target = list.firstWhere((w) => w.id == id);
+                  ref.read(selectedWorkspaceProvider.notifier).state = target;
+                  ref.read(conversationProvider.notifier).loadConversations(target.id);
+                  ref.read(selectedConversationProvider.notifier).state = null;
+                  ref.read(messagesProvider.notifier).state = [];
+                },
+                itemBuilder: (_) => list
+                    .map((w) => PopupMenuItem<String>(
+                          value: w.id,
+                          child: Row(
+                            children: [
+                              Icon(
+                                w.id == ws.id ? Icons.check_circle : Icons.circle_outlined,
+                                size: 16,
+                                color: w.id == ws.id
+                                    ? Theme.of(context).colorScheme.primary
+                                    : Colors.grey,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(w.name),
+                            ],
+                          ),
+                        ))
+                    .toList(),
+              );
+            },
+            loading: () => const SizedBox.shrink(),
+            error: (_, __) => const SizedBox.shrink(),
+          ),
+          const Spacer(),
+          if (ws.description != null && ws.description!.isNotEmpty)
+            Text(
+              ws.description!,
+              style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+        ],
+      ),
     );
   }
 
@@ -699,7 +787,17 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     );
   }
 
+  Future<void> _toggleSendMode() async {
+    final current = ref.read(sendModeProvider);
+    final next = current == SendMode.enter ? SendMode.ctrlEnter : SendMode.enter;
+    ref.read(sendModeProvider.notifier).state = next;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+        'send_mode', next == SendMode.ctrlEnter ? 'ctrlEnter' : 'enter');
+  }
+
   Widget _buildInputBar() {
+    final sendMode = ref.watch(sendModeProvider);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
@@ -710,41 +808,96 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 720),
-          child: Row(
-        children: [
-          Expanded(
-            child: TextField(
-              controller: _controller,
-              minLines: 1,
-              maxLines: 4,
-              decoration: InputDecoration(
-                hintText: '输入你的问题...',
-                filled: true,
-                fillColor:
-                    Theme.of(context).colorScheme.surfaceContainerHighest,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(24),
-                  borderSide: BorderSide.none,
-                ),
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: KeyboardListener(
+                      focusNode: FocusNode(),
+                      onKeyEvent: (event) {
+                        if (event is! KeyDownEvent) return;
+                        final isEnter = event.logicalKey == LogicalKeyboardKey.enter;
+                        if (!isEnter) return;
+
+                        final keyboard = HardwareKeyboard.instance;
+                        if (sendMode == SendMode.enter) {
+                          if (keyboard.isShiftPressed) return;
+                          if (!_isSending) {
+                            _sendMessage();
+                          }
+                        } else {
+                          if (keyboard.isControlPressed || keyboard.isMetaPressed) {
+                            if (!_isSending) {
+                              _sendMessage();
+                            }
+                          }
+                        }
+                      },
+                      child: TextField(
+                          controller: _controller,
+                          minLines: 1,
+                          maxLines: 4,
+                          textInputAction: sendMode == SendMode.ctrlEnter
+                              ? TextInputAction.newline
+                              : TextInputAction.send,
+                          decoration: InputDecoration(
+                            hintText: '输入你的问题...',
+                            filled: true,
+                            fillColor:
+                                Theme.of(context).colorScheme.surfaceContainerHighest,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(24),
+                              borderSide: BorderSide.none,
+                            ),
+                            contentPadding:
+                                const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                          ),
+                          onSubmitted: sendMode == SendMode.enter
+                              ? (_) => _sendMessage()
+                              : null,
+                        ),
+                      ),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton.filled(
+                    onPressed: _isSending ? null : _sendMessage,
+                    icon: _isSending
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2))
+                        : const Icon(Icons.send),
+                  ),
+                ],
               ),
-              onSubmitted: (_) => _sendMessage(),
-            ),
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  InkWell(
+                    onTap: _toggleSendMode,
+                    borderRadius: BorderRadius.circular(4),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                      child: Text(
+                        sendMode == SendMode.enter
+                            ? 'Enter 发送'
+                            : 'Ctrl+Enter 发送',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.grey.shade500,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Icon(Icons.swap_horiz, size: 12, color: Colors.grey.shade400),
+                ],
+              ),
+            ],
           ),
-          const SizedBox(width: 8),
-          IconButton.filled(
-            onPressed: _isSending ? null : _sendMessage,
-            icon: _isSending
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2))
-                : const Icon(Icons.send),
-          ),
-        ],
-      ),
-      ),
+        ),
       ),
     );
   }

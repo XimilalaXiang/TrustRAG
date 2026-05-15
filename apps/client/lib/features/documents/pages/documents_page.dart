@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../chat/providers/chat_provider.dart';
 import '../../dashboard/providers/workspace_provider.dart';
 import '../providers/document_provider.dart';
 import 'document_viewer_page.dart';
@@ -142,19 +143,25 @@ class _DocumentsPageState extends ConsumerState<DocumentsPage> {
           ),
           child: Row(
             children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              Row(
                 children: [
-                  Text('资料库',
-                      style: Theme.of(context)
-                          .textTheme
-                          .titleLarge
-                          ?.copyWith(fontWeight: FontWeight.bold)),
-                  Text(ws.name,
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodySmall
-                          ?.copyWith(color: Colors.grey)),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('资料库',
+                          style: Theme.of(context)
+                              .textTheme
+                              .titleLarge
+                              ?.copyWith(fontWeight: FontWeight.bold)),
+                      Text(ws.name,
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodySmall
+                              ?.copyWith(color: Colors.grey)),
+                    ],
+                  ),
+                  const SizedBox(width: 8),
+                  _buildWorkspaceSwitch(ws),
                 ],
               ),
               const Spacer(),
@@ -316,6 +323,72 @@ class _DocumentsPageState extends ConsumerState<DocumentsPage> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildWorkspaceSwitch(dynamic ws) {
+    final workspaces = ref.watch(workspaceProvider);
+    return workspaces.when(
+      data: (list) {
+        if (list.length <= 1) return const SizedBox.shrink();
+        return PopupMenuButton<String>(
+          tooltip: '切换工作区/资料库',
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: Theme.of(context).colorScheme.outline),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.swap_horiz, size: 16, color: Theme.of(context).colorScheme.primary),
+                const SizedBox(width: 4),
+                Text('切换', style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.primary)),
+              ],
+            ),
+          ),
+          onSelected: (id) {
+            final target = list.firstWhere((w) => w.id == id);
+            ref.read(selectedWorkspaceProvider.notifier).state = target;
+            ref.read(documentProvider.notifier).loadDocuments(target.id);
+            ref.read(conversationProvider.notifier).loadConversations(target.id);
+            ref.read(selectedConversationProvider.notifier).state = null;
+            ref.read(messagesProvider.notifier).state = [];
+          },
+          itemBuilder: (_) => list
+              .map((w) => PopupMenuItem<String>(
+                    value: w.id,
+                    child: Row(
+                      children: [
+                        Icon(
+                          w.id == ws.id ? Icons.check_circle : Icons.circle_outlined,
+                          size: 16,
+                          color: w.id == ws.id
+                              ? Theme.of(context).colorScheme.primary
+                              : Colors.grey,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(w.name),
+                        if (w.description != null) ...[
+                          const SizedBox(width: 8),
+                          Flexible(
+                            child: Text(
+                              w.description!,
+                              style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ))
+              .toList(),
+        );
+      },
+      loading: () => const SizedBox.shrink(),
+      error: (_, __) => const SizedBox.shrink(),
     );
   }
 

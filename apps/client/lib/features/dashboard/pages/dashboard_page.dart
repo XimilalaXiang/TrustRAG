@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/providers/dev_mode_provider.dart';
+import '../../../core/services/backend_manager.dart';
 import '../../../main.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../chat/pages/chat_page.dart';
@@ -314,10 +317,61 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
               ),
               const SizedBox(height: 8),
               Card(
+                child: SwitchListTile(
+                  secondary: Icon(
+                    Icons.developer_mode,
+                    color: ref.watch(devModeProvider) ? Colors.orange : null,
+                  ),
+                  title: const Text('开发者模式'),
+                  subtitle: Text(ref.watch(devModeProvider)
+                      ? '已开启 — 显示调试工具'
+                      : '开启后可查看日志、API 请求等调试信息'),
+                  value: ref.watch(devModeProvider),
+                  onChanged: (_) => ref.read(devModeProvider.notifier).toggle(),
+                ),
+              ),
+              if (ref.watch(devModeProvider)) ...[
+                const SizedBox(height: 8),
+                Card(
+                  child: ListTile(
+                    leading: const Icon(Icons.terminal, color: Colors.orange),
+                    title: const Text('调试日志'),
+                    subtitle: const Text('查看运行时日志和 API 请求记录'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => _showDebugLogPanel(),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Card(
+                  child: ListTile(
+                    leading: const Icon(Icons.info_outline, color: Colors.orange),
+                    title: const Text('运行环境'),
+                    subtitle: Text(
+                      'Backend: ${BackendManager().baseUrl}\n'
+                      'Embedded: ${BackendManager.shouldRunEmbedded}',
+                    ),
+                    isThreeLine: true,
+                    trailing: IconButton(
+                      icon: const Icon(Icons.copy, size: 18),
+                      onPressed: () {
+                        Clipboard.setData(ClipboardData(
+                          text: 'Backend: ${BackendManager().baseUrl}\n'
+                              'Embedded: ${BackendManager.shouldRunEmbedded}',
+                        ));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('环境信息已复制'), duration: Duration(seconds: 2)),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 8),
+              Card(
                 child: ListTile(
                   leading: const Icon(Icons.info_outline),
                   title: const Text('关于'),
-                  subtitle: const Text('TrustRAG v1.0.0'),
+                  subtitle: const Text('TrustRAG v0.1.0'),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => _showAboutDialog(),
                 ),
@@ -359,6 +413,78 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
           ),
           const Spacer(),
           if (actions != null) ...actions,
+        ],
+      ),
+    );
+  }
+
+  void _showDebugLogPanel() {
+    final logs = DebugLogBuffer().logs;
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Row(
+          children: [
+            const Icon(Icons.terminal, color: Colors.orange, size: 22),
+            const SizedBox(width: 8),
+            const Text('调试日志'),
+            const Spacer(),
+            TextButton.icon(
+              onPressed: () {
+                DebugLogBuffer().clear();
+                Navigator.pop(ctx);
+                _showDebugLogPanel();
+              },
+              icon: const Icon(Icons.delete_sweep, size: 16),
+              label: const Text('清空'),
+            ),
+          ],
+        ),
+        content: SizedBox(
+          width: 600,
+          height: 400,
+          child: logs.isEmpty
+              ? const Center(
+                  child: Text('暂无日志', style: TextStyle(color: Colors.grey)),
+                )
+              : ListView.builder(
+                  reverse: true,
+                  itemCount: logs.length,
+                  itemBuilder: (_, i) {
+                    final log = logs[logs.length - 1 - i];
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 1),
+                      child: SelectableText(
+                        log,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontFamily: 'monospace',
+                          color: log.contains('ERROR')
+                              ? Colors.red
+                              : log.contains('WARN')
+                                  ? Colors.orange
+                                  : Colors.grey.shade700,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+        ),
+        actions: [
+          TextButton.icon(
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: logs.join('\n')));
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('日志已复制到剪贴板'), duration: Duration(seconds: 2)),
+              );
+            },
+            icon: const Icon(Icons.copy, size: 16),
+            label: const Text('复制全部'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('关闭'),
+          ),
         ],
       ),
     );
@@ -440,7 +566,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
             const Text('TrustRAG - 可信赖的 RAG 知识工作台',
                 style: TextStyle(fontWeight: FontWeight.w600)),
             const SizedBox(height: 12),
-            _infoRow('版本', 'v1.0.0'),
+            _infoRow('版本', 'v0.1.0'),
             const SizedBox(height: 4),
             _infoRow('后端', 'Rust (Axum)'),
             const SizedBox(height: 4),

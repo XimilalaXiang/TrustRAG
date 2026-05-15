@@ -1,3 +1,6 @@
+import 'dart:io' show Platform;
+
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -5,16 +8,56 @@ class AppTheme {
   static const _teal = Color(0xFF20B2AA);
   static const _citationBlue = Color(0xFF0066CC);
 
+  static const _cjkFallback = [
+    'Microsoft YaHei UI',
+    'Microsoft YaHei',
+    'PingFang SC',
+    'Hiragino Sans GB',
+    'Noto Sans SC',
+    'Source Han Sans SC',
+    'WenQuanYi Micro Hei',
+    'sans-serif',
+  ];
+
+  static bool get _needsCjkFallback =>
+      !kIsWeb && (Platform.isWindows || Platform.isLinux);
+
+  static TextStyle _withFallback(TextStyle style) {
+    if (!_needsCjkFallback) return style;
+    return style.copyWith(fontFamilyFallback: _cjkFallback);
+  }
+
+  static TextTheme _applyFallback(TextTheme theme) {
+    if (!_needsCjkFallback) return theme;
+    return theme.copyWith(
+      displayLarge: theme.displayLarge != null ? _withFallback(theme.displayLarge!) : null,
+      displayMedium: theme.displayMedium != null ? _withFallback(theme.displayMedium!) : null,
+      displaySmall: theme.displaySmall != null ? _withFallback(theme.displaySmall!) : null,
+      headlineLarge: theme.headlineLarge != null ? _withFallback(theme.headlineLarge!) : null,
+      headlineMedium: theme.headlineMedium != null ? _withFallback(theme.headlineMedium!) : null,
+      headlineSmall: theme.headlineSmall != null ? _withFallback(theme.headlineSmall!) : null,
+      titleLarge: theme.titleLarge != null ? _withFallback(theme.titleLarge!) : null,
+      titleMedium: theme.titleMedium != null ? _withFallback(theme.titleMedium!) : null,
+      titleSmall: theme.titleSmall != null ? _withFallback(theme.titleSmall!) : null,
+      bodyLarge: theme.bodyLarge != null ? _withFallback(theme.bodyLarge!) : null,
+      bodyMedium: theme.bodyMedium != null ? _withFallback(theme.bodyMedium!) : null,
+      bodySmall: theme.bodySmall != null ? _withFallback(theme.bodySmall!) : null,
+      labelLarge: theme.labelLarge != null ? _withFallback(theme.labelLarge!) : null,
+      labelMedium: theme.labelMedium != null ? _withFallback(theme.labelMedium!) : null,
+      labelSmall: theme.labelSmall != null ? _withFallback(theme.labelSmall!) : null,
+    );
+  }
+
   static ThemeData get light {
     final base = ThemeData.light(useMaterial3: true);
-    final textTheme = GoogleFonts.interTextTheme(base.textTheme).copyWith(
+    final textTheme = _applyFallback(GoogleFonts.interTextTheme(base.textTheme).copyWith(
       headlineMedium: GoogleFonts.inter(fontSize: 24, fontWeight: FontWeight.w700, height: 1.4, color: const Color(0xFF1A1A1A)),
       titleLarge: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w600, height: 1.5, color: const Color(0xFF1A1A1A)),
       bodyLarge: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w400, height: 1.7, color: const Color(0xFF1A1A1A)),
       bodyMedium: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w400, height: 1.5, color: const Color(0xFF1A1A1A)),
       bodySmall: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w500, color: const Color(0xFF6B7280)),
       labelLarge: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600, color: const Color(0xFF1A1A1A)),
-    );
+    ));
 
     return base.copyWith(
       colorScheme: const ColorScheme.light(
@@ -33,7 +76,7 @@ class AppTheme {
         scrolledUnderElevation: 0,
         backgroundColor: Colors.white,
         foregroundColor: const Color(0xFF1A1A1A),
-        titleTextStyle: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w600, color: const Color(0xFF1A1A1A)),
+        titleTextStyle: _withFallback(GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w600, color: const Color(0xFF1A1A1A))),
       ),
       cardTheme: CardThemeData(
         elevation: 0,
@@ -94,14 +137,14 @@ class AppTheme {
 
   static ThemeData get dark {
     final base = ThemeData.dark(useMaterial3: true);
-    final textTheme = GoogleFonts.interTextTheme(base.textTheme).copyWith(
+    final textTheme = _applyFallback(GoogleFonts.interTextTheme(base.textTheme).copyWith(
       headlineMedium: GoogleFonts.inter(fontSize: 24, fontWeight: FontWeight.w700, height: 1.4, color: const Color(0xFFF9FAFB)),
       titleLarge: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w600, height: 1.5, color: const Color(0xFFF9FAFB)),
       bodyLarge: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w400, height: 1.7, color: const Color(0xFFF9FAFB)),
       bodyMedium: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w400, height: 1.5, color: const Color(0xFFF9FAFB)),
       bodySmall: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w500, color: const Color(0xFF9CA3AF)),
       labelLarge: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600, color: const Color(0xFFF9FAFB)),
-    );
+    ));
 
     return base.copyWith(
       colorScheme: const ColorScheme.dark(
@@ -119,7 +162,7 @@ class AppTheme {
         elevation: 0,
         scrolledUnderElevation: 0,
         backgroundColor: const Color(0xFF262626),
-        titleTextStyle: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w600, color: const Color(0xFFF9FAFB)),
+        titleTextStyle: _withFallback(GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w600, color: const Color(0xFFF9FAFB))),
       ),
       cardTheme: CardThemeData(
         elevation: 0,

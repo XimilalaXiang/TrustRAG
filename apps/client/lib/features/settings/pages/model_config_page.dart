@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/model_config_provider.dart';
@@ -133,12 +134,17 @@ class _ModelConfigPageState extends ConsumerState<ModelConfigPage>
         .testConnectionDetailed(cfg.id);
     if (context.mounted) {
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(result['message'] ?? '未知结果'),
-        backgroundColor:
-            result['success'] == true ? Colors.green : Colors.red,
-        duration: const Duration(seconds: 4),
-      ));
+      final success = result['success'] == true;
+      final message = result['message'] ?? '未知结果';
+      if (success) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(message),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 4),
+        ));
+      } else {
+        _showErrorDialog('LLM 连接测试失败', message);
+      }
     }
   }
 
@@ -214,13 +220,76 @@ class _ModelConfigPageState extends ConsumerState<ModelConfigPage>
         await ref.read(embeddingConfigProvider.notifier).testConnection(cfg.id);
     if (context.mounted) {
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(result['message'] ?? '未知结果'),
-        backgroundColor:
-            result['success'] == true ? Colors.green : Colors.red,
-        duration: const Duration(seconds: 4),
-      ));
+      final success = result['success'] == true;
+      final message = result['message'] ?? '未知结果';
+      if (success) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(message),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 4),
+        ));
+      } else {
+        _showErrorDialog('嵌入模型连接测试失败', message);
+      }
     }
+  }
+
+  // ── Error Dialog ──
+
+  void _showErrorDialog(String title, String message) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Row(
+          children: [
+            const Icon(Icons.error_outline, color: Colors.red, size: 24),
+            const SizedBox(width: 8),
+            Expanded(child: Text(title, style: const TextStyle(fontSize: 16))),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: double.infinity,
+              constraints: const BoxConstraints(maxHeight: 200),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.red.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.red.shade200),
+              ),
+              child: SingleChildScrollView(
+                child: SelectableText(
+                  message,
+                  style: TextStyle(fontSize: 13, color: Colors.red.shade900, height: 1.5),
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton.icon(
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: message));
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('错误信息已复制到剪贴板'),
+                  duration: Duration(seconds: 2),
+                ),
+              );
+            },
+            icon: const Icon(Icons.copy, size: 16),
+            label: const Text('复制错误信息'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('关闭'),
+          ),
+        ],
+      ),
+    );
   }
 
   // ── Shared Widgets ──
