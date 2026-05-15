@@ -2,12 +2,10 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/api/api_client.dart';
+import '../../../core/services/desktop_auto_setup.dart';
 
 final apiClientProvider = Provider<ApiClient>((ref) {
-  return ApiClient(baseUrl: const String.fromEnvironment(
-    'API_BASE_URL',
-    defaultValue: '/api',
-  ));
+  return ApiClient();
 });
 
 enum AuthStatus { unknown, authenticated, unauthenticated }
@@ -48,6 +46,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   Future<void> _checkAuth() async {
+    // For desktop embedded mode, auto-setup creates and logs in a local user
+    if (DesktopAutoSetup.shouldAutoSetup) {
+      await DesktopAutoSetup.ensureSetup(_api);
+    }
+
     final token = await ApiClient.getToken();
     if (token != null) {
       try {
