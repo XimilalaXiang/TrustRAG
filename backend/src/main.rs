@@ -34,6 +34,22 @@ fn init_logging() {
     }
 }
 
+#[cfg(feature = "desktop")]
+async fn ensure_data_dir(config: &config::AppConfig) -> anyhow::Result<()> {
+    std::fs::create_dir_all(&config.data_dir)?;
+    tracing::info!(data_dir = %config.data_dir, "Data directory ready");
+    Ok(())
+}
+
+#[cfg(feature = "desktop")]
+async fn run_sqlite_migrations(pool: &sqlx::SqlitePool) -> anyhow::Result<()> {
+    sqlx::query(include_str!("../migrations_sqlite/init.sql"))
+        .execute(pool)
+        .await?;
+    tracing::info!("SQLite schema initialized");
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     init_logging();
@@ -46,11 +62,20 @@ async fn main() -> anyhow::Result<()> {
     let config = config::AppConfig::load()?;
     tracing::info!(listen_addr = %config.listen_addr, "Configuration loaded");
 
+    #[cfg(feature = "desktop")]
+    ensure_data_dir(&config).await?;
+
     let pool = db::create_pool(&config.database_url).await?;
     tracing::info!("Database connection pool established");
 
-    sqlx::migrate!("./migrations").run(&pool).await?;
-    tracing::info!("Database migrations completed");
+    #[cfg(feature = "postgres")]
+    {
+        sqlx::migrate!("./migrations").run(&pool).await?;
+        tracing::info!("Database migrations completed");
+    }
+
+    #[cfg(feature = "desktop")]
+    run_sqlite_migrations(&pool).await?;
 
     let storage = StorageService::new(&config)?;
     tracing::info!(bucket = %storage.bucket(), "Storage service initialized");

@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
-use sqlx::PgPool;
 use uuid::Uuid;
 
+use crate::db::DbPool;
 use crate::traits::embedding_provider::EmbeddingProvider;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -53,25 +53,27 @@ pub struct SearchResponse {
     pub search_time_ms: u64,
 }
 
-/// Vector search using pgvector cosine similarity.
+pub type SearchRow = (Uuid, Uuid, String, Option<String>, Option<i32>, Option<i32>, f64);
+
+// ============================================================
+// PostgreSQL implementation
+// ============================================================
+
+#[cfg(feature = "postgres")]
 pub async fn vector_search(
-    pool: &PgPool,
+    pool: &DbPool,
     workspace_id: Uuid,
     query_embedding: &[f32],
     top_k: usize,
     document_ids: Option<&[Uuid]>,
-) -> anyhow::Result<Vec<(Uuid, Uuid, String, Option<String>, Option<i32>, Option<i32>, f64)>> {
+) -> anyhow::Result<Vec<SearchRow>> {
     let embedding_str = format!(
         "[{}]",
-        query_embedding
-            .iter()
-            .map(|v| v.to_string())
-            .collect::<Vec<_>>()
-            .join(",")
+        query_embedding.iter().map(|v| v.to_string()).collect::<Vec<_>>().join(",")
     );
 
     let rows = if let Some(doc_ids) = document_ids {
-        sqlx::query_as::<_, (Uuid, Uuid, String, Option<String>, Option<i32>, Option<i32>, f64)>(
+        sqlx::query_as::<_, SearchRow>(
             r#"
             SELECT dc.id, dc.document_id, dc.content, dc.heading_path,
                    dc.page_start, dc.page_end,
@@ -92,7 +94,7 @@ pub async fn vector_search(
         .fetch_all(pool)
         .await?
     } else {
-        sqlx::query_as::<_, (Uuid, Uuid, String, Option<String>, Option<i32>, Option<i32>, f64)>(
+        sqlx::query_as::<_, SearchRow>(
             r#"
             SELECT dc.id, dc.document_id, dc.content, dc.heading_path,
                    dc.page_start, dc.page_end,
@@ -115,16 +117,16 @@ pub async fn vector_search(
     Ok(rows)
 }
 
-/// Full-text search using pg_trgm similarity.
+#[cfg(feature = "postgres")]
 pub async fn fulltext_search(
-    pool: &PgPool,
+    pool: &DbPool,
     workspace_id: Uuid,
     query: &str,
     top_k: usize,
     document_ids: Option<&[Uuid]>,
-) -> anyhow::Result<Vec<(Uuid, Uuid, String, Option<String>, Option<i32>, Option<i32>, f64)>> {
+) -> anyhow::Result<Vec<SearchRow>> {
     let rows = if let Some(doc_ids) = document_ids {
-        sqlx::query_as::<_, (Uuid, Uuid, String, Option<String>, Option<i32>, Option<i32>, f64)>(
+        sqlx::query_as::<_, SearchRow>(
             r#"
             SELECT dc.id, dc.document_id, dc.content, dc.heading_path,
                    dc.page_start, dc.page_end,
@@ -145,7 +147,7 @@ pub async fn fulltext_search(
         .fetch_all(pool)
         .await?
     } else {
-        sqlx::query_as::<_, (Uuid, Uuid, String, Option<String>, Option<i32>, Option<i32>, f64)>(
+        sqlx::query_as::<_, SearchRow>(
             r#"
             SELECT dc.id, dc.document_id, dc.content, dc.heading_path,
                    dc.page_start, dc.page_end,
@@ -168,10 +170,162 @@ pub async fn fulltext_search(
     Ok(rows)
 }
 
-/// Reciprocal Rank Fusion (RRF) to merge two ranked lists.
+// ============================================================
+// SQLite (desktop) implementation
+// ============================================================
+
+#[cfg(feature = "desktop")]
+pub async fn vector_search(
+    pool: &DbPool,
+    workspace_id: Uuid,
+    query_embedding: &[f32],
+    top_k: usize,
+    document_ids: Option<&[Uuid]>,
+) -> anyhow::Result<Vec<SearchRow>> {
+    let ws_str = workspace_id.to_string();
+
+    let rows = if let Some(doc_ids) = document_ids {
+        let placeholders: Vec<String> = doc_ids.iter().map(|id| format!("'{}'", id)).collect();
+        let in_clause = placeholders.join(",");
+        let query_str = format!(
+            r#"SELECT dc.id, dc.document_id, dc.content, dc.heading_path,
+                      dc.page_start, dc.page_end, dc.embedding
+               FROM document_chunks dc
+               JOIN documents d ON dc.document_id = d.id
+               WHERE d.workspace_id = ?1
+                 AND dc.embedding IS NOT NULL
+                 AND dc.document_id IN ({})
+            "#,
+            in_clause
+        );
+        sqlx::query_as::<_, (String, String, String, Option<String>, Option<i32>, Option<i32>, Vec<u8>)>(
+            &query_str,
+        )
+        .bind(&ws_str)
+        .fetch_all(pool)
+        .await?
+    } else {
+        sqlx::query_as::<_, (String, String, String, Option<String>, Option<i32>, Option<i32>, Vec<u8>)>(
+            r#"SELECT dc.id, dc.document_id, dc.content, dc.heading_path,
+                      dc.page_start, dc.page_end, dc.embedding
+               FROM document_chunks dc
+               JOIN documents d ON dc.document_id = d.id
+               WHERE d.workspace_id = ?1
+                 AND dc.embedding IS NOT NULL
+            "#,
+        )
+        .bind(&ws_str)
+        .fetch_all(pool)
+        .await?
+    };
+
+    let mut scored: Vec<SearchRow> = rows
+        .into_iter()
+        .filter_map(|(id, doc_id, content, heading, ps, pe, emb_blob)| {
+            let chunk_id = Uuid::parse_str(&id).ok()?;
+            let document_id = Uuid::parse_str(&doc_id).ok()?;
+            let stored_emb = crate::services::embedding::blob_to_embedding(&emb_blob);
+            let score = cosine_similarity(query_embedding, &stored_emb);
+            Some((chunk_id, document_id, content, heading, ps, pe, score))
+        })
+        .collect();
+
+    scored.sort_by(|a, b| b.6.partial_cmp(&a.6).unwrap_or(std::cmp::Ordering::Equal));
+    scored.truncate(top_k);
+
+    Ok(scored)
+}
+
+#[cfg(feature = "desktop")]
+fn cosine_similarity(a: &[f32], b: &[f32]) -> f64 {
+    if a.len() != b.len() || a.is_empty() {
+        return 0.0;
+    }
+    let mut dot = 0.0f64;
+    let mut norm_a = 0.0f64;
+    let mut norm_b = 0.0f64;
+    for (x, y) in a.iter().zip(b.iter()) {
+        let x = *x as f64;
+        let y = *y as f64;
+        dot += x * y;
+        norm_a += x * x;
+        norm_b += y * y;
+    }
+    let denom = norm_a.sqrt() * norm_b.sqrt();
+    if denom == 0.0 { 0.0 } else { dot / denom }
+}
+
+#[cfg(feature = "desktop")]
+pub async fn fulltext_search(
+    pool: &DbPool,
+    workspace_id: Uuid,
+    query: &str,
+    top_k: usize,
+    document_ids: Option<&[Uuid]>,
+) -> anyhow::Result<Vec<SearchRow>> {
+    let ws_str = workspace_id.to_string();
+    let fts_query = query.split_whitespace().collect::<Vec<_>>().join(" OR ");
+
+    let base_query = if let Some(doc_ids) = document_ids {
+        let placeholders: Vec<String> = doc_ids.iter().map(|id| format!("'{}'", id)).collect();
+        let in_clause = placeholders.join(",");
+        format!(
+            r#"SELECT dc.id, dc.document_id, dc.content, dc.heading_path,
+                      dc.page_start, dc.page_end,
+                      CAST(rank AS REAL) as score
+               FROM document_chunks dc
+               JOIN documents d ON dc.document_id = d.id
+               JOIN chunks_fts ON chunks_fts.chunk_id = dc.id
+               WHERE d.workspace_id = ?1
+                 AND dc.document_id IN ({})
+                 AND chunks_fts MATCH ?2
+               ORDER BY rank
+               LIMIT ?3
+            "#,
+            in_clause
+        )
+    } else {
+        r#"SELECT dc.id, dc.document_id, dc.content, dc.heading_path,
+                  dc.page_start, dc.page_end,
+                  CAST(rank AS REAL) as score
+           FROM document_chunks dc
+           JOIN documents d ON dc.document_id = d.id
+           JOIN chunks_fts ON chunks_fts.chunk_id = dc.id
+           WHERE d.workspace_id = ?1
+             AND chunks_fts MATCH ?2
+           ORDER BY rank
+           LIMIT ?3
+        "#.to_string()
+    };
+
+    let raw_rows = sqlx::query_as::<_, (String, String, String, Option<String>, Option<i32>, Option<i32>, f64)>(
+        &base_query,
+    )
+    .bind(&ws_str)
+    .bind(&fts_query)
+    .bind(top_k as i64)
+    .fetch_all(pool)
+    .await?;
+
+    let rows: Vec<SearchRow> = raw_rows
+        .into_iter()
+        .filter_map(|(id, doc_id, content, heading, ps, pe, score)| {
+            let chunk_id = Uuid::parse_str(&id).ok()?;
+            let document_id = Uuid::parse_str(&doc_id).ok()?;
+            Some((chunk_id, document_id, content, heading, ps, pe, score.abs()))
+        })
+        .collect();
+
+    Ok(rows)
+}
+
+// ============================================================
+// Shared logic
+// ============================================================
+
 pub fn rrf_fusion(
-    vector_results: &[(Uuid, Uuid, String, Option<String>, Option<i32>, Option<i32>, f64)],
-    fulltext_results: &[(Uuid, Uuid, String, Option<String>, Option<i32>, Option<i32>, f64)],
+    vector_results: &[SearchRow],
+    fulltext_results: &[SearchRow],
     k: f64,
     top_k: usize,
 ) -> Vec<SearchResult> {
@@ -209,9 +363,8 @@ pub fn rrf_fusion(
     results
 }
 
-/// Execute a hybrid search (vector + fulltext + RRF).
 pub async fn hybrid_search(
-    pool: &PgPool,
+    pool: &DbPool,
     embedding_provider: &dyn EmbeddingProvider,
     workspace_id: Uuid,
     query: &str,

@@ -4,9 +4,9 @@ use async_openai::{
     Client,
 };
 use async_trait::async_trait;
-use sqlx::PgPool;
 use uuid::Uuid;
 
+use crate::db::DbPool;
 use crate::traits::embedding_provider::EmbeddingProvider;
 
 /// Ensure api_base ends with /v1 for OpenAI-compatible APIs.
@@ -154,9 +154,10 @@ impl EmbeddingProvider for OllamaEmbeddingProvider {
     }
 }
 
-/// Write chunk embeddings to pgvector in batches.
+/// Write chunk embeddings to the database.
+/// On postgres: uses pgvector column. On sqlite (desktop): stores as BLOB.
 pub async fn store_chunk_embeddings(
-    pool: &PgPool,
+    pool: &DbPool,
     chunk_ids: &[Uuid],
     embeddings: &[Vec<f32>],
 ) -> anyhow::Result<()> {
@@ -172,33 +173,60 @@ pub async fn store_chunk_embeddings(
         return Ok(());
     }
 
-    let batch_size = 50;
-    for batch_start in (0..chunk_ids.len()).step_by(batch_size) {
-        let batch_end = (batch_start + batch_size).min(chunk_ids.len());
-        let batch_ids = &chunk_ids[batch_start..batch_end];
-        let batch_embeddings = &embeddings[batch_start..batch_end];
+    #[cfg(feature = "postgres")]
+    {
+        let batch_size = 50;
+        for batch_start in (0..chunk_ids.len()).step_by(batch_size) {
+            let batch_end = (batch_start + batch_size).min(chunk_ids.len());
+            let batch_ids = &chunk_ids[batch_start..batch_end];
+            let batch_embeddings = &embeddings[batch_start..batch_end];
 
-        let mut query = String::from(
-            "UPDATE document_chunks SET embedding = v.emb::vector FROM (VALUES "
-        );
-
-        for (i, (chunk_id, embedding)) in batch_ids.iter().zip(batch_embeddings.iter()).enumerate() {
-            if i > 0 {
-                query.push_str(", ");
-            }
-            let embedding_str = format!(
-                "[{}]",
-                embedding.iter().map(|v| v.to_string()).collect::<Vec<_>>().join(",")
+            let mut query = String::from(
+                "UPDATE document_chunks SET embedding = v.emb::vector FROM (VALUES "
             );
-            query.push_str(&format!("('{}'::uuid, '{}')", chunk_id, embedding_str));
+
+            for (i, (chunk_id, embedding)) in batch_ids.iter().zip(batch_embeddings.iter()).enumerate() {
+                if i > 0 {
+                    query.push_str(", ");
+                }
+                let embedding_str = format!(
+                    "[{}]",
+                    embedding.iter().map(|v| v.to_string()).collect::<Vec<_>>().join(",")
+                );
+                query.push_str(&format!("('{}'::uuid, '{}')", chunk_id, embedding_str));
+            }
+
+            query.push_str(") AS v(id, emb) WHERE document_chunks.id = v.id");
+
+            sqlx::query(&query).execute(pool).await?;
         }
+    }
 
-        query.push_str(") AS v(id, emb) WHERE document_chunks.id = v.id");
-
-        sqlx::query(&query).execute(pool).await?;
+    #[cfg(feature = "desktop")]
+    {
+        for (chunk_id, embedding) in chunk_ids.iter().zip(embeddings.iter()) {
+            let blob = embedding_to_blob(embedding);
+            sqlx::query("UPDATE document_chunks SET embedding = ?1 WHERE id = ?2")
+                .bind(&blob)
+                .bind(chunk_id.to_string())
+                .execute(pool)
+                .await?;
+        }
     }
 
     Ok(())
+}
+
+#[cfg(feature = "desktop")]
+fn embedding_to_blob(embedding: &[f32]) -> Vec<u8> {
+    embedding.iter().flat_map(|f| f.to_le_bytes()).collect()
+}
+
+#[cfg(feature = "desktop")]
+pub fn blob_to_embedding(blob: &[u8]) -> Vec<f32> {
+    blob.chunks_exact(4)
+        .map(|chunk| f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]))
+        .collect()
 }
 
 #[cfg(test)]

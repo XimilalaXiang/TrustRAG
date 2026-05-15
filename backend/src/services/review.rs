@@ -1,7 +1,8 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use sqlx::PgPool;
 use uuid::Uuid;
+
+use crate::db::DbPool;
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct ReviewRecord {
@@ -23,7 +24,7 @@ pub struct CreateReviewInput {
 }
 
 pub async fn create_review(
-    pool: &PgPool,
+    pool: &DbPool,
     citation_id: Uuid,
     reviewer_id: Uuid,
     input: &CreateReviewInput,
@@ -64,7 +65,7 @@ pub async fn create_review(
 }
 
 pub async fn list_reviews_for_citation(
-    pool: &PgPool,
+    pool: &DbPool,
     citation_id: Uuid,
 ) -> anyhow::Result<Vec<ReviewRecord>> {
     let records = sqlx::query_as::<_, ReviewRecord>(
@@ -93,7 +94,7 @@ pub struct ReviewStats {
 }
 
 pub async fn get_review_stats_for_conversation(
-    pool: &PgPool,
+    pool: &DbPool,
     conversation_id: Uuid,
 ) -> anyhow::Result<ReviewStats> {
     let total_citations = sqlx::query_scalar::<_, i64>(

@@ -1,4 +1,3 @@
-use opendal::services::S3;
 use opendal::Operator;
 
 use crate::config::AppConfig;
@@ -6,12 +5,14 @@ use crate::config::AppConfig;
 #[derive(Clone)]
 pub struct StorageService {
     operator: Operator,
-    bucket: String,
+    #[allow(dead_code)]
+    root: String,
 }
 
 impl StorageService {
+    #[cfg(feature = "postgres")]
     pub fn new(config: &AppConfig) -> anyhow::Result<Self> {
-        let builder = S3::default()
+        let builder = opendal::services::S3::default()
             .endpoint(&config.minio_endpoint)
             .access_key_id(&config.minio_access_key)
             .secret_access_key(&config.minio_secret_key)
@@ -22,16 +23,30 @@ impl StorageService {
 
         Ok(Self {
             operator,
-            bucket: config.minio_bucket.clone(),
+            root: config.minio_bucket.clone(),
         })
     }
 
-    /// Build the storage path: `workspaces/{ws_id}/documents/{doc_id}/{filename}`
+    #[cfg(feature = "desktop")]
+    pub fn new(config: &AppConfig) -> anyhow::Result<Self> {
+        let storage_dir = format!("{}/files", config.data_dir);
+        std::fs::create_dir_all(&storage_dir)?;
+
+        let builder = opendal::services::Fs::default()
+            .root(&storage_dir);
+
+        let operator = Operator::new(builder)?.finish();
+
+        Ok(Self {
+            operator,
+            root: storage_dir,
+        })
+    }
+
     pub fn document_path(workspace_id: &uuid::Uuid, doc_id: &uuid::Uuid, filename: &str) -> String {
         format!("workspaces/{}/documents/{}/{}", workspace_id, doc_id, filename)
     }
 
-    /// Build the markdown path: `workspaces/{ws_id}/documents/{doc_id}/markdown.md`
     pub fn markdown_path(workspace_id: &uuid::Uuid, doc_id: &uuid::Uuid) -> String {
         format!("workspaces/{}/documents/{}/markdown.md", workspace_id, doc_id)
     }
@@ -64,7 +79,6 @@ impl StorageService {
         Ok(meta.content_length())
     }
 
-    /// Delete all files under a prefix (e.g., a document directory)
     pub async fn delete_dir(&self, prefix: &str) -> anyhow::Result<()> {
         let entries: Vec<_> = self.operator.list(prefix).await?;
         for entry in entries {
@@ -74,7 +88,7 @@ impl StorageService {
     }
 
     pub fn bucket(&self) -> &str {
-        &self.bucket
+        &self.root
     }
 
     pub fn operator(&self) -> &Operator {

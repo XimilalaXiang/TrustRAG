@@ -1,8 +1,8 @@
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use sqlx::PgPool;
 use uuid::Uuid;
 
+use crate::db::DbPool;
 use crate::services::rag::AssembledSource;
 
 /// Parsed citation reference from LLM output
@@ -93,7 +93,7 @@ pub fn verify_citations(
 
 /// Store verified citations in the database
 pub async fn store_citations(
-    pool: &PgPool,
+    pool: &DbPool,
     message_id: Uuid,
     citations: &[ExtractedCitation],
 ) -> anyhow::Result<Vec<Uuid>> {
@@ -130,7 +130,7 @@ pub async fn store_citations(
 
 /// Full citation pipeline: extract → verify → store
 pub async fn process_citations(
-    pool: &PgPool,
+    pool: &DbPool,
     message_id: Uuid,
     response_text: &str,
     sources: &[AssembledSource],

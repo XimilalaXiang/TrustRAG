@@ -103,7 +103,7 @@ fn validate_file_type(filename: &str) -> Result<String, AppError> {
 
 /// Verify user has access to workspace
 async fn check_workspace_access(
-    pool: &sqlx::PgPool,
+    pool: &crate::db::DbPool,
     ws_id: Uuid,
     user_id: Uuid,
 ) -> Result<(), AppError> {

@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
-use sqlx::PgPool;
 use uuid::Uuid;
 
+use crate::db::DbPool;
 use crate::services::search::{self, SearchConfig, SearchMode, SearchResult};
 use crate::traits::embedding_provider::EmbeddingProvider;
 use crate::traits::llm_provider::{LlmMessage, LlmProvider, LlmRequest, LlmResponse, StreamEvent};
@@ -143,7 +143,7 @@ pub async fn expand_query(
 }
 
 async fn search_with_expansion(
-    pool: &PgPool,
+    pool: &DbPool,
     embedding_provider: &dyn EmbeddingProvider,
     llm_provider: &dyn LlmProvider,
     workspace_id: Uuid,
@@ -371,7 +371,7 @@ pub struct RagResponse {
 
 /// Non-streaming RAG pipeline
 pub async fn run_rag_pipeline(
-    pool: &PgPool,
+    pool: &DbPool,
     embedding_provider: &dyn EmbeddingProvider,
     llm_provider: &dyn LlmProvider,
     workspace_id: Uuid,
@@ -466,7 +466,7 @@ pub async fn run_rag_pipeline(
 
 /// Streaming RAG pipeline - returns sources after retrieval, then streams LLM output
 pub async fn run_rag_pipeline_stream(
-    pool: &PgPool,
+    pool: &DbPool,
     embedding_provider: &dyn EmbeddingProvider,
     llm_provider: &dyn LlmProvider,
     workspace_id: Uuid,

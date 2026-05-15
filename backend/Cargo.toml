@@ -5,6 +5,11 @@ edition = "2021"
 description = "TrustRAG - Trustworthy RAG Knowledge Workbench Backend"
 license = "Apache-2.0"
 
+[features]
+default = ["postgres"]
+postgres = ["sqlx/postgres", "opendal/services-s3"]
+desktop = ["sqlx/sqlite", "opendal/services-fs", "usearch"]
+
 [dependencies]
 axum = { version = "0.8", features = ["macros", "multipart"] }
 axum-extra = { version = "0.10", features = ["typed-header"] }
@@ -12,8 +17,8 @@ tokio = { version = "1", features = ["full"] }
 bytes = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-sqlx = { version = "0.8", features = ["runtime-tokio", "tls-rustls", "postgres", "uuid", "chrono", "json", "migrate"] }
-redis = { version = "0.27", features = ["tokio-comp", "connection-manager"] }
+sqlx = { version = "0.8", features = ["runtime-tokio", "tls-rustls", "uuid", "chrono", "json", "migrate"] }
+redis = { version = "0.27", features = ["tokio-comp", "connection-manager"], optional = true }
 jsonwebtoken = "9"
 argon2 = "0.5"
 password-hash = { version = "0.5", features = ["std"] }
@@ -25,7 +30,7 @@ hex = "0.4"
 futures-util = "0.3"
 async-stream = "0.3"
 regex = "1"
-opendal = { version = "0.51", features = ["services-s3"] }
+opendal = "0.51"
 tower = "0.5"
 tower-http = { version = "0.6", features = ["cors", "trace"] }
 tracing = "0.1"
@@ -41,3 +46,5 @@ utoipa = { version = "5", features = ["axum_extras"] }
 utoipa-swagger-ui = { version = "8", features = ["axum"] }
 moka = { version = "0.12.15", features = ["future"] }
 urlencoding = "2.1.3"
+usearch = { version = "2", optional = true }
+directories = "5"

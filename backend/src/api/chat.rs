@@ -26,7 +26,7 @@ use crate::traits::llm_provider::{LlmMessage, LlmProvider, StreamEvent};
 use super::AppState;
 
 async fn check_workspace_access(
-    pool: &sqlx::PgPool,
+    pool: &crate::db::DbPool,
     ws_id: Uuid,
     user_id: Uuid,
 ) -> Result<(), AppError> {
@@ -484,7 +484,7 @@ async fn send_message(
 }
 
 fn build_sse_stream(
-    pool: sqlx::PgPool,
+    pool: crate::db::DbPool,
     embedding_provider: Option<Arc<dyn crate::traits::embedding_provider::EmbeddingProvider>>,
     llm_provider: Arc<OpenAILlmProvider>,
     workspace_id: Uuid,

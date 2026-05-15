@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
-use sqlx::PgPool;
 use uuid::Uuid;
 
+use crate::db::DbPool;
 use crate::services::chunking::{chunk_markdown, ChunkConfig};
 use crate::services::embedding::store_chunk_embeddings;
 use crate::services::storage::StorageService;
@@ -27,7 +27,7 @@ pub struct DocProcessorMetadata {
 
 /// Update document processing status.
 async fn update_status(
-    pool: &PgPool,
+    pool: &DbPool,
     doc_id: Uuid,
     status: &str,
     error: Option<&str>,
@@ -55,7 +55,7 @@ async fn update_status(
 /// 7. Store embeddings in pgvector
 /// 8. Update document status to 'ready'
 pub async fn process_document(
-    pool: PgPool,
+    pool: DbPool,
     storage: StorageService,
     doc_processor_url: String,
     embedding_provider: Option<Arc<dyn EmbeddingProvider>>,
@@ -78,7 +78,7 @@ pub async fn process_document(
 }
 
 async fn process_document_inner(
-    pool: &PgPool,
+    pool: &DbPool,
     storage: &StorageService,
     doc_processor_url: &str,
     embedding_provider: Option<&dyn EmbeddingProvider>,

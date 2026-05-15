@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
 use moka::future::Cache;
-use sqlx::PgPool;
 use tokio::sync::RwLock;
 
+use crate::db::DbPool;
 use crate::services::storage::StorageService;
 use crate::traits::embedding_provider::EmbeddingProvider;
 
@@ -21,7 +21,7 @@ pub mod workspace_members;
 
 #[derive(Clone)]
 pub struct AppState {
-    pub pool: PgPool,
+    pub pool: DbPool,
     pub jwt_secret: String,
     pub storage: StorageService,
     pub max_upload_size: u64,

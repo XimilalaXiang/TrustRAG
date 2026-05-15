@@ -47,7 +47,7 @@ struct UpdateRoleRequest {
 }
 
 async fn check_owner_or_editor(
-    pool: &sqlx::PgPool,
+    pool: &crate::db::DbPool,
     ws_id: Uuid,
     user_id: Uuid,
 ) -> Result<String, AppError> {
@@ -84,7 +84,7 @@ async fn check_owner_or_editor(
 }
 
 async fn check_workspace_access(
-    pool: &sqlx::PgPool,
+    pool: &crate::db::DbPool,
     ws_id: Uuid,
     user_id: Uuid,
 ) -> Result<(), AppError> {
