@@ -110,6 +110,18 @@ fn parse_conv_row(r: ConvRow) -> Result<ConversationResponse, AppError> {
 const CONV_SELECT: &str = "id, workspace_id, user_id, title, model_config_id, CAST(document_scope AS TEXT), CAST(created_at AS TEXT), CAST(updated_at AS TEXT)";
 
 #[derive(Serialize, Clone)]
+pub struct MessageCitationResponse {
+    pub id: Uuid,
+    pub document_id: Uuid,
+    pub chunk_id: Uuid,
+    pub citation_index: i32,
+    pub quoted_text: Option<String>,
+    pub page_number: Option<i32>,
+    pub heading_path: Option<String>,
+    pub relevance_score: Option<f64>,
+}
+
+#[derive(Serialize, Clone)]
 pub struct MessageResponse {
     pub id: Uuid,
     pub conversation_id: Uuid,
@@ -120,6 +132,8 @@ pub struct MessageResponse {
     pub completion_tokens: Option<i32>,
     pub latency_ms: Option<i32>,
     pub created_at: String,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub citations: Vec<MessageCitationResponse>,
 }
 
 type MsgRow = (String, String, String, String, Option<String>, Option<i32>, Option<i32>, Option<i32>, String);
@@ -136,6 +150,7 @@ fn parse_msg_row(r: MsgRow) -> Result<MessageResponse, AppError> {
         completion_tokens: r.6,
         latency_ms: r.7,
         created_at: r.8,
+        citations: Vec::new(),
     })
 }
 
@@ -322,9 +337,49 @@ async fn list_messages(
     .fetch_all(&state.pool)
     .await?;
 
-    let msgs: Vec<MessageResponse> = rows.into_iter()
+    let mut msgs: Vec<MessageResponse> = rows.into_iter()
         .map(parse_msg_row)
         .collect::<Result<_, _>>()?;
+
+    let msg_ids: Vec<String> = msgs.iter().map(|m| m.id.to_string()).collect();
+    if !msg_ids.is_empty() {
+        let placeholders: Vec<String> = msg_ids.iter().enumerate()
+            .map(|(i, _)| format!("${}", i + 1))
+            .collect();
+        let sql = format!(
+            "SELECT id, message_id, document_id, chunk_id, citation_index, \
+             quoted_text, page_number, heading_path, relevance_score \
+             FROM citations WHERE message_id IN ({}) ORDER BY citation_index ASC",
+            placeholders.join(", ")
+        );
+        let mut q = sqlx::query_as::<_, (String, String, String, String, i32, Option<String>, Option<i32>, Option<String>, Option<f64>)>(&sql);
+        for mid in &msg_ids {
+            q = q.bind(mid);
+        }
+        let cit_rows = q.fetch_all(&state.pool).await?;
+
+        use std::collections::HashMap;
+        let mut cit_map: HashMap<Uuid, Vec<MessageCitationResponse>> = HashMap::new();
+        for cr in cit_rows {
+            let mid = cr.1.parse::<Uuid>().unwrap_or_default();
+            cit_map.entry(mid).or_default().push(MessageCitationResponse {
+                id: cr.0.parse().unwrap_or_default(),
+                document_id: cr.2.parse().unwrap_or_default(),
+                chunk_id: cr.3.parse().unwrap_or_default(),
+                citation_index: cr.4,
+                quoted_text: cr.5,
+                page_number: cr.6,
+                heading_path: cr.7,
+                relevance_score: cr.8,
+            });
+        }
+        for msg in &mut msgs {
+            if let Some(cits) = cit_map.remove(&msg.id) {
+                msg.citations = cits;
+            }
+        }
+    }
+
     Ok(Json(msgs))
 }
 

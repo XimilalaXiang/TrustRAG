@@ -80,11 +80,15 @@ class ChatMessage {
   });
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) {
+    final citationsJson = json['citations'] as List?;
     return ChatMessage(
       id: json['id'],
       role: json['role'],
       content: json['content'],
       modelName: json['model_name'],
+      citations: citationsJson != null
+          ? citationsJson.map((c) => Citation.fromJson(c as Map<String, dynamic>)).toList()
+          : [],
       createdAt: DateTime.parse(json['created_at']),
     );
   }
