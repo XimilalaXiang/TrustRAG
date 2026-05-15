@@ -131,7 +131,10 @@ async fn update(
     .await?
     .ok_or_else(|| AppError::NotFound("Workspace not found or not owned by you".into()))?;
 
-    let name = req.name.unwrap_or(ws.name);
+    let name = req.name.map(|n| n.trim().to_string()).unwrap_or(ws.name);
+    if name.is_empty() {
+        return Err(AppError::BadRequest("Name cannot be empty".into()));
+    }
     let description = req.description.or(ws.description);
     let visibility = req.visibility.unwrap_or(ws.visibility);
     if !matches!(visibility.as_str(), "private" | "public") {
