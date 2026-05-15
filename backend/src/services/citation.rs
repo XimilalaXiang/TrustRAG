@@ -130,16 +130,17 @@ pub async fn store_citations(
 }
 
 /// Full citation pipeline: extract → verify → store
+/// Returns (citations, stored_db_ids) where stored_db_ids maps to valid citations only
 pub async fn process_citations(
     pool: &DbPool,
     message_id: Uuid,
     response_text: &str,
     sources: &[AssembledSource],
-) -> anyhow::Result<Vec<ExtractedCitation>> {
+) -> anyhow::Result<(Vec<ExtractedCitation>, Vec<Uuid>)> {
     let refs = extract_citations(response_text);
     let citations = verify_citations(&refs, sources);
-    store_citations(pool, message_id, &citations).await?;
-    Ok(citations)
+    let ids = store_citations(pool, message_id, &citations).await?;
+    Ok((citations, ids))
 }
 
 #[cfg(test)]

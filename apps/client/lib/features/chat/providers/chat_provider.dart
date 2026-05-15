@@ -26,6 +26,7 @@ class Conversation {
 }
 
 class Citation {
+  final String id;
   final int index;
   final String chunkId;
   final String documentId;
@@ -35,6 +36,7 @@ class Citation {
   final String text;
 
   Citation({
+    required this.id,
     required this.index,
     required this.chunkId,
     required this.documentId,
@@ -46,13 +48,14 @@ class Citation {
 
   factory Citation.fromJson(Map<String, dynamic> json) {
     return Citation(
-      index: json['index'] ?? 0,
+      id: json['id'] ?? '',
+      index: json['index'] ?? json['citation_index'] ?? 0,
       chunkId: json['chunk_id'] ?? '',
       documentId: json['document_id'] ?? '',
-      heading: json['heading'],
-      page: json['page'],
-      score: (json['score'] ?? 0).toDouble(),
-      text: json['text'] ?? '',
+      heading: json['heading'] ?? json['heading_path'],
+      page: json['page'] ?? json['page_number'],
+      score: (json['score'] ?? json['relevance_score'] ?? 0).toDouble(),
+      text: json['text'] ?? json['quoted_text'] ?? '',
     );
   }
 }

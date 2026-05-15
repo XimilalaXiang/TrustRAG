@@ -173,6 +173,29 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                     updated,
                   ];
                 }
+              } else if (eventType == 'citations_stored') {
+                final stored = event['stored'] as List? ?? [];
+                setState(() {
+                  for (final item in stored) {
+                    final idx = item['index'] as int? ?? 0;
+                    final citId = item['citation_id']?.toString() ?? '';
+                    for (int i = 0; i < _streamingCitations.length; i++) {
+                      if (_streamingCitations[i].index == idx && _streamingCitations[i].id.isEmpty) {
+                        _streamingCitations[i] = Citation(
+                          id: citId,
+                          index: _streamingCitations[i].index,
+                          chunkId: _streamingCitations[i].chunkId,
+                          documentId: _streamingCitations[i].documentId,
+                          heading: _streamingCitations[i].heading,
+                          page: _streamingCitations[i].page,
+                          score: _streamingCitations[i].score,
+                          text: _streamingCitations[i].text,
+                        );
+                        break;
+                      }
+                    }
+                  }
+                });
               } else if (eventType == 'message_end') {
                 final fullContent = _streamingContent;
                 if (fullContent.isNotEmpty) {
@@ -756,9 +779,12 @@ class _CitationDetailDialogState
   Future<void> _loadReviews() async {
     try {
       final svc = ref.read(reviewServiceProvider);
-      final reviews = await svc.listReviews(widget.citation.chunkId.isEmpty
-          ? widget.citation.documentId
-          : widget.citation.chunkId);
+      final citId = widget.citation.id;
+      if (citId.isEmpty) {
+        if (mounted) setState(() { _reviews = []; _loading = false; });
+        return;
+      }
+      final reviews = await svc.listReviews(citId);
       if (mounted) setState(() { _reviews = reviews; _loading = false; });
     } catch (_) {
       if (mounted) setState(() { _reviews = []; _loading = false; });
@@ -766,13 +792,18 @@ class _CitationDetailDialogState
   }
 
   Future<void> _submitReview(String status, {String? comment}) async {
+    if (widget.citation.id.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('引用ID未就绪，请稍后重试')),
+        );
+      }
+      return;
+    }
     setState(() => _submitting = true);
     try {
       final svc = ref.read(reviewServiceProvider);
-      final citId = widget.citation.chunkId.isEmpty
-          ? widget.citation.documentId
-          : widget.citation.chunkId;
-      await svc.createReview(citId, status: status, comment: comment);
+      await svc.createReview(widget.citation.id, status: status, comment: comment);
       await _loadReviews();
     } catch (e) {
       if (mounted) {

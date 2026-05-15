@@ -187,6 +187,17 @@ struct SuggestionsEvent {
 }
 
 #[derive(Serialize)]
+struct CitationStoredInfo {
+    index: usize,
+    citation_id: Uuid,
+}
+
+#[derive(Serialize)]
+struct CitationsStoredEvent {
+    stored: Vec<CitationStoredInfo>,
+}
+
+#[derive(Serialize)]
 struct NonStreamingResponse {
     message: MessageResponse,
     citations: Vec<CitationEvent>,
@@ -512,10 +523,7 @@ async fn send_message(
             }
         }
 
-        let citations: Vec<CitationEvent> = result
-            .sources
-            .iter()
-            .map(|s| CitationEvent {
+        let citations: Vec<CitationEvent> = result.sources.iter().map(|s| CitationEvent {
                 index: s.index,
                 chunk_id: s.chunk_id,
                 document_id: s.document_id,
@@ -682,14 +690,31 @@ fn build_sse_stream(
                     }
 
                     if !sources.is_empty() {
-                        if let Err(e) = citation::process_citations(
+                        match citation::process_citations(
                             &pool, message_id, &full_content, &sources
                         ).await {
-                            tracing::error!(
-                                message_id = %message_id,
-                                error = %e,
-                                "Failed to store citations"
-                            );
+                            Ok((extracted, ids)) => {
+                                let valid_citations: Vec<_> = extracted.iter()
+                                    .filter(|c| c.verification == citation::VerificationResult::Valid)
+                                    .collect();
+                                let stored: Vec<CitationStoredInfo> = valid_citations.iter()
+                                    .zip(ids.iter())
+                                    .map(|(c, id)| CitationStoredInfo {
+                                        index: c.citation_index,
+                                        citation_id: *id,
+                                    })
+                                    .collect();
+                                if let Ok(data) = serde_json::to_string(&CitationsStoredEvent { stored }) {
+                                    yield Ok(Event::default().event("citations_stored").data(data));
+                                }
+                            }
+                            Err(e) => {
+                                tracing::error!(
+                                    message_id = %message_id,
+                                    error = %e,
+                                    "Failed to store citations"
+                                );
+                            }
                         }
                     }
 
