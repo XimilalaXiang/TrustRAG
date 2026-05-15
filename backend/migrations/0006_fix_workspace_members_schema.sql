@@ -22,3 +22,9 @@ BEGIN
         UPDATE workspace_members SET created_at = joined_at WHERE created_at = now();
     END IF;
 END $$;
+
+-- Fix role CHECK constraint: 0001 uses ('admin','editor','viewer')
+-- but code and 0004 use ('owner','editor','viewer')
+ALTER TABLE workspace_members DROP CONSTRAINT IF EXISTS workspace_members_role_check;
+ALTER TABLE workspace_members ADD CONSTRAINT workspace_members_role_check
+    CHECK (role IN ('owner', 'admin', 'editor', 'viewer'));
