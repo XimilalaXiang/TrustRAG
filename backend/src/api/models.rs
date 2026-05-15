@@ -171,6 +171,16 @@ async fn create_config(
     auth: AuthUser,
     Json(req): Json<CreateConfigRequest>,
 ) -> Result<(StatusCode, Json<ModelConfigResponse>), AppError> {
+    let name = req.name.trim().to_string();
+    if name.is_empty() {
+        return Err(AppError::BadRequest("Config name is required".into()));
+    }
+    let model_name = req.model_name.trim().to_string();
+    if model_name.is_empty() {
+        return Err(AppError::BadRequest("Model name is required".into()));
+    }
+    let api_base_url = req.api_base_url.trim().to_string();
+
     let valid_providers = ["openai", "anthropic", "ollama", "custom"];
     if !valid_providers.contains(&req.provider.as_str()) {
         return Err(AppError::BadRequest(format!(
@@ -185,7 +195,6 @@ async fn create_config(
         .as_deref()
         .map(|k| encrypt_api_key(k, &state.jwt_secret));
 
-    // If is_default, clear other defaults for same user
     if req.is_default {
         sqlx::query("UPDATE model_configs SET is_default = false WHERE user_id = $1")
             .bind(auth.id)
@@ -217,11 +226,11 @@ async fn create_config(
     )
     .bind(req.workspace_id)
     .bind(auth.id)
-    .bind(&req.name)
+    .bind(&name)
     .bind(&req.provider)
-    .bind(&req.api_base_url)
+    .bind(&api_base_url)
     .bind(&api_key_enc)
-    .bind(&req.model_name)
+    .bind(&model_name)
     .bind(req.temperature)
     .bind(req.max_tokens)
     .bind(req.is_default)
