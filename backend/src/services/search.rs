@@ -264,7 +264,19 @@ pub async fn fulltext_search(
     document_ids: Option<&[Uuid]>,
 ) -> anyhow::Result<Vec<SearchRow>> {
     let ws_str = workspace_id.to_string();
-    let fts_query = query.split_whitespace().collect::<Vec<_>>().join(" OR ");
+    let sanitized: String = query.chars()
+        .map(|c| if "\"*(){}[]|:!?.,;".contains(c) { ' ' } else { c })
+        .collect();
+    let words: Vec<&str> = sanitized.split_whitespace()
+        .filter(|w| !w.is_empty() && *w != "OR" && *w != "AND" && *w != "NOT" && *w != "NEAR")
+        .collect();
+    if words.is_empty() {
+        return Ok(vec![]);
+    }
+    let fts_query = words.iter()
+        .map(|w| format!("\"{}\"", w))
+        .collect::<Vec<_>>()
+        .join(" OR ");
 
     let base_query = if let Some(doc_ids) = document_ids {
         let placeholders: Vec<String> = doc_ids.iter().map(|id| format!("'{}'", id)).collect();
