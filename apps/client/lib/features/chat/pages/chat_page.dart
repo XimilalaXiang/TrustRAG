@@ -556,15 +556,21 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     if (isUser) {
       return Align(
         alignment: Alignment.centerRight,
-        child: Container(
-          constraints: const BoxConstraints(maxWidth: 560),
-          margin: const EdgeInsets.symmetric(vertical: 8),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          decoration: BoxDecoration(
-            color: theme.colorScheme.surfaceContainerHighest,
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Text(msg.content, style: theme.textTheme.bodyLarge),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Container(
+              constraints: const BoxConstraints(maxWidth: 560),
+              margin: const EdgeInsets.symmetric(vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Text(msg.content, style: theme.textTheme.bodyLarge),
+            ),
+            _buildMessageActions(msg, isUser: true),
+          ],
         ),
       );
     }
@@ -589,8 +595,116 @@ class _ChatPageState extends ConsumerState<ChatPage> {
               ),
             ),
           ),
+          _buildMessageActions(msg, isUser: false),
           if (msg.citations.isNotEmpty) _buildCitationCards(msg.citations),
           if (msg.suggestions.isNotEmpty) _buildSuggestionPills(msg.suggestions),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMessageActions(ChatMessage msg, {required bool isUser}) {
+    final theme = Theme.of(context);
+    final iconColor = theme.colorScheme.onSurface.withValues(alpha: 0.5);
+    const iconSize = 16.0;
+    const btnPadding = EdgeInsets.all(6);
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 4, bottom: 2),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _actionBtn(Icons.copy_rounded, '复制', iconColor, iconSize, btnPadding, () {
+            Clipboard.setData(ClipboardData(text: msg.content));
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('已复制'), duration: Duration(seconds: 1)),
+            );
+          }),
+          if (!isUser) ...[
+            const SizedBox(width: 2),
+            _actionBtn(Icons.refresh_rounded, '重试', iconColor, iconSize, btnPadding, () {
+              _retryMessage(msg);
+            }),
+          ],
+          const SizedBox(width: 2),
+          _actionBtn(Icons.edit_rounded, '编辑', iconColor, iconSize, btnPadding, () {
+            _editMessage(msg);
+          }),
+        ],
+      ),
+    );
+  }
+
+  Widget _actionBtn(IconData icon, String tooltip, Color color, double size,
+      EdgeInsets padding, VoidCallback onTap) {
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(6),
+        onTap: onTap,
+        child: Padding(
+          padding: padding,
+          child: Icon(icon, size: size, color: color),
+        ),
+      ),
+    );
+  }
+
+  void _retryMessage(ChatMessage msg) {
+    final msgs = ref.read(messagesProvider);
+    final idx = msgs.indexWhere((m) => m.id == msg.id);
+    if (idx <= 0) return;
+    final userMsg = msgs[idx - 1];
+    if (userMsg.role != 'user') return;
+    ref.read(messagesProvider.notifier).state = msgs.sublist(0, idx);
+    _controller.text = userMsg.content;
+    _sendMessage();
+  }
+
+  void _editMessage(ChatMessage msg) {
+    final editController = TextEditingController(text: msg.content);
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('编辑消息'),
+        content: TextField(
+          controller: editController,
+          maxLines: 8,
+          minLines: 3,
+          decoration: const InputDecoration(
+            border: OutlineInputBorder(),
+            hintText: '编辑消息内容...',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('取消'),
+          ),
+          if (msg.role == 'user')
+            FilledButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                final msgs = ref.read(messagesProvider);
+                final idx = msgs.indexWhere((m) => m.id == msg.id);
+                if (idx < 0) return;
+                ref.read(messagesProvider.notifier).state = msgs.sublist(0, idx);
+                _controller.text = editController.text;
+                _sendMessage();
+              },
+              child: const Text('重新发送'),
+            )
+          else
+            FilledButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                Clipboard.setData(ClipboardData(text: editController.text));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('已复制编辑内容'), duration: Duration(seconds: 1)),
+                );
+              },
+              child: const Text('复制'),
+            ),
         ],
       ),
     );
