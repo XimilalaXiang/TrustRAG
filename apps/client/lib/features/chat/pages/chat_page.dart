@@ -814,34 +814,34 @@ class _ChatPageState extends ConsumerState<ChatPage> {
               Row(
                 children: [
                   Expanded(
-                    child: KeyboardListener(
-                      focusNode: FocusNode(),
-                      onKeyEvent: (event) {
-                        if (event is! KeyDownEvent) return;
+                    child: Focus(
+                      onKeyEvent: (node, event) {
+                        if (event is! KeyDownEvent) return KeyEventResult.ignored;
                         final isEnter = event.logicalKey == LogicalKeyboardKey.enter;
-                        if (!isEnter) return;
+                        if (!isEnter) return KeyEventResult.ignored;
 
                         final keyboard = HardwareKeyboard.instance;
                         if (sendMode == SendMode.enter) {
-                          if (keyboard.isShiftPressed) return;
+                          if (keyboard.isShiftPressed) return KeyEventResult.ignored;
                           if (!_isSending) {
                             _sendMessage();
                           }
+                          return KeyEventResult.handled;
                         } else {
                           if (keyboard.isControlPressed || keyboard.isMetaPressed) {
                             if (!_isSending) {
                               _sendMessage();
                             }
+                            return KeyEventResult.handled;
                           }
                         }
+                        return KeyEventResult.ignored;
                       },
                       child: TextField(
                           controller: _controller,
                           minLines: 1,
                           maxLines: 4,
-                          textInputAction: sendMode == SendMode.ctrlEnter
-                              ? TextInputAction.newline
-                              : TextInputAction.send,
+                          textInputAction: TextInputAction.newline,
                           decoration: InputDecoration(
                             hintText: '输入你的问题...',
                             filled: true,
@@ -854,9 +854,6 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                             contentPadding:
                                 const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                           ),
-                          onSubmitted: sendMode == SendMode.enter
-                              ? (_) => _sendMessage()
-                              : null,
                         ),
                       ),
                   ),
