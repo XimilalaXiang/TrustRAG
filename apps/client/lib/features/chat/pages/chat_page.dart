@@ -10,9 +10,11 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:streaming_markdown/streaming_markdown.dart' hide MarkdownStyleSheet;
 
+import '../../../core/utils/ai_icon_helper.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../dashboard/providers/workspace_provider.dart';
 import '../../reader/pages/pdf_viewer_page.dart';
+import '../../settings/providers/model_config_provider.dart';
 import '../providers/chat_provider.dart';
 import '../providers/review_provider.dart';
 
@@ -575,32 +577,57 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       );
     }
 
+    final modelLabel = _resolveModelLabel(msg);
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 12),
-      child: Column(
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          MarkdownBody(
-            data: msg.content,
-            selectable: true,
-            styleSheet: MarkdownStyleSheet(
-              p: theme.textTheme.bodyLarge,
-              h1: theme.textTheme.headlineMedium,
-              h2: theme.textTheme.titleLarge,
-              code: GoogleFonts.jetBrainsMono(fontSize: 14, height: 1.5),
-              codeblockDecoration: BoxDecoration(
-                color: theme.colorScheme.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: theme.colorScheme.outline),
-              ),
+          Padding(
+            padding: const EdgeInsets.only(top: 2, right: 10),
+            child: AIIconHelper.buildIcon(modelLabel, size: 22,
+                color: theme.colorScheme.onSurface),
+          ),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                MarkdownBody(
+                  data: msg.content,
+                  selectable: true,
+                  styleSheet: MarkdownStyleSheet(
+                    p: theme.textTheme.bodyLarge,
+                    h1: theme.textTheme.headlineMedium,
+                    h2: theme.textTheme.titleLarge,
+                    code: GoogleFonts.jetBrainsMono(fontSize: 14, height: 1.5),
+                    codeblockDecoration: BoxDecoration(
+                      color: theme.colorScheme.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: theme.colorScheme.outline),
+                    ),
+                  ),
+                ),
+                _buildMessageActions(msg, isUser: false),
+                if (msg.citations.isNotEmpty) _buildCitationCards(msg.citations),
+                if (msg.suggestions.isNotEmpty) _buildSuggestionPills(msg.suggestions),
+              ],
             ),
           ),
-          _buildMessageActions(msg, isUser: false),
-          if (msg.citations.isNotEmpty) _buildCitationCards(msg.citations),
-          if (msg.suggestions.isNotEmpty) _buildSuggestionPills(msg.suggestions),
         ],
       ),
     );
+  }
+
+  String _resolveModelLabel(ChatMessage msg) {
+    if (msg.modelName != null && msg.modelName!.isNotEmpty) {
+      return msg.modelName!;
+    }
+    final configs = ref.read(modelConfigProvider);
+    final list = configs.valueOrNull ?? [];
+    final defaultCfg = list.where((c) => c.isDefault).firstOrNull;
+    if (defaultCfg != null) return defaultCfg.modelName;
+    if (list.isNotEmpty) return list.first.modelName;
+    return 'AI';
   }
 
   Widget _buildMessageActions(ChatMessage msg, {required bool isUser}) {
@@ -858,44 +885,62 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   }
 
   Widget _buildStreamingBubble() {
+    final modelLabel = _resolveModelLabel(ChatMessage(
+      id: '',
+      role: 'assistant',
+      content: '',
+      createdAt: DateTime.now(),
+    ));
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 12),
-      child: Column(
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (_streamingContent.isEmpty)
-            Row(
-              mainAxisSize: MainAxisSize.min,
+          Padding(
+            padding: const EdgeInsets.only(top: 2, right: 10),
+            child: AIIconHelper.buildIcon(modelLabel, size: 22,
+                color: Theme.of(context).colorScheme.onSurface),
+          ),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Theme.of(context).colorScheme.primary,
+                if (_streamingContent.isEmpty)
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text('思考中...',
+                          style: TextStyle(color: Colors.grey.shade500)),
+                    ],
+                  )
+                else if (_streamingTextController != null)
+                  AnimatedMarkdown(
+                    stream: _streamingTextController!.stream,
+                    config: const AnimationConfig(
+                      mode: AnimationMode.token,
+                      chunkSize: 3,
+                    ),
+                    selectable: true,
+                  )
+                else
+                  MarkdownBody(
+                    data: _streamingContent,
+                    selectable: true,
                   ),
-                ),
-                const SizedBox(width: 8),
-                Text('思考中...',
-                    style: TextStyle(color: Colors.grey.shade500)),
+                if (_streamingCitations.isNotEmpty)
+                  _buildCitationCards(_streamingCitations),
               ],
-            )
-          else if (_streamingTextController != null)
-            AnimatedMarkdown(
-              stream: _streamingTextController!.stream,
-              config: const AnimationConfig(
-                mode: AnimationMode.token,
-                chunkSize: 3,
-              ),
-              selectable: true,
-            )
-          else
-            MarkdownBody(
-              data: _streamingContent,
-              selectable: true,
             ),
-          if (_streamingCitations.isNotEmpty)
-            _buildCitationCards(_streamingCitations),
+          ),
         ],
       ),
     );

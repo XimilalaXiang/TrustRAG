@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/utils/ai_icon_helper.dart';
 import '../providers/model_config_provider.dart';
 import '../providers/embedding_config_provider.dart';
 
@@ -86,11 +87,10 @@ class _ModelConfigPageState extends ConsumerState<ModelConfigPage>
   Widget _buildLlmCard(ModelConfig cfg) {
     return Card(
       child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor:
-              cfg.isDefault ? Colors.green.shade100 : Colors.grey.shade100,
-          child: Icon(Icons.smart_toy,
-              color: cfg.isDefault ? Colors.green : Colors.grey),
+        leading: AIIconHelper.buildProviderAvatar(
+          cfg.modelName.isNotEmpty ? cfg.modelName : cfg.provider,
+          radius: 20,
+          isDefault: cfg.isDefault,
         ),
         title: Row(children: [
           Text(cfg.modelName,
@@ -171,11 +171,10 @@ class _ModelConfigPageState extends ConsumerState<ModelConfigPage>
   Widget _buildEmbeddingCard(EmbeddingConfig cfg) {
     return Card(
       child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor:
-              cfg.isDefault ? Colors.blue.shade100 : Colors.grey.shade100,
-          child: Icon(Icons.data_array,
-              color: cfg.isDefault ? Colors.blue : Colors.grey),
+        leading: AIIconHelper.buildProviderAvatar(
+          cfg.modelName.isNotEmpty ? cfg.modelName : cfg.provider,
+          radius: 20,
+          isDefault: cfg.isDefault,
         ),
         title: Row(children: [
           Text(cfg.modelName,
