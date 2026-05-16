@@ -14,6 +14,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.1] - 2026-05-16
+
+### Added / 新增
+- 🎨 **AI provider icons / AI 提供商图标** — Model config and chat messages now show provider-specific icons (OpenAI, Claude, Gemini, etc.) instead of generic placeholders
+- 🎨 **AI 提供商图标** — 模型配置和聊天消息现在显示提供商专属图标（OpenAI、Claude、Gemini 等），替代通用占位符
+- 📋 **Message action bar / 消息操作栏** — Copy, retry, and edit buttons for AI responses
+- 📋 **消息操作栏** — AI 回复支持复制、重试和编辑按钮
+
+### Fixed / 修复
+- 🐛 Fix double message sending on Enter key press / 修复按回车键重复发送消息
+- 🐛 Fix Windows installer referencing wrong executable name / 修复 Windows 安装包引用错误的可执行文件名
+- 🐛 Fix macOS bundle path from client.app to TrustRAG.app / 修复 macOS 应用包路径
+- 🐛 Fix app title from "client" to "TrustRAG" across all platforms / 修复全平台应用标题
+- 🐛 Remove unused import in desktop_auto_setup.dart / 移除未使用的导入
+
+### Changed / 变更
+- 🔧 Implement Issue #2 improvements + developer mode / 实现 Issue #2 改进 + 开发者模式
+
+### Infrastructure / 基础设施
+- 📚 Add VitePress documentation site with bilingual content / 添加 VitePress 双语文档站
+- 📚 Overhaul README with modern layout and separate language files / 重构 README
+- 📚 Add documentation site links to all README files / 添加文档站链接
+- 📄 Replace abbreviated LICENSE with full Apache 2.0 text / 替换完整 Apache 2.0 许可证
+- 🔧 Add test-build workflow for test branch validation / 添加 test 分支测试构建
+- 🔧 Refactor release workflow with auto-generated notes from CHANGELOG / 重构发布流程
+
+---
+
 ## [0.1.0] - 2026-05-15
 
 ### 🎉 Initial Release / 首次发布

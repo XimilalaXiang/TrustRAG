@@ -1,6 +1,6 @@
 [Setup]
 AppName=TrustRAG
-AppVersion=1.0.0
+AppVersion=0.1.1
 AppPublisher=TrustRAG Team
 DefaultDirName={autopf}\TrustRAG
 DefaultGroupName=TrustRAG
