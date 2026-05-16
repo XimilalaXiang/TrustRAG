@@ -119,7 +119,7 @@ jobs:
       - name: Bundle backend (macOS)
         if: runner.os == 'macOS'
         run: |
-          APP_DIR="apps/client/build/macos/Build/Products/Release/client.app"
+          APP_DIR="apps/client/build/macos/Build/Products/Release/TrustRAG.app"
           cp backend/target/release/trustrag-backend "$APP_DIR/Contents/Resources/"
           cd apps/client/build/macos/Build/Products/Release
           tar czf ../../../../../trustrag-macos.tar.gz *.app
