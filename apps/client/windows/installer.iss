@@ -10,7 +10,7 @@ Compression=lzma2
 SolidCompression=yes
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
-UninstallDisplayIcon={app}\client.exe
+UninstallDisplayIcon={app}\TrustRAG.exe
 WizardStyle=modern
 
 [Tasks]
@@ -20,9 +20,9 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 Source: "..\build\windows\x64\runner\Release\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{group}\TrustRAG"; Filename: "{app}\client.exe"
+Name: "{group}\TrustRAG"; Filename: "{app}\TrustRAG.exe"
 Name: "{group}\{cm:UninstallProgram,TrustRAG}"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\TrustRAG"; Filename: "{app}\client.exe"; Tasks: desktopicon
+Name: "{autodesktop}\TrustRAG"; Filename: "{app}\TrustRAG.exe"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\client.exe"; Description: "{cm:LaunchProgram,TrustRAG}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\TrustRAG.exe"; Description: "{cm:LaunchProgram,TrustRAG}"; Flags: nowait postinstall skipifsilent
