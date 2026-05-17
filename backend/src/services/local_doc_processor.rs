@@ -86,7 +86,7 @@ fn parse_pdf_fallback(data: &[u8], filename: &str) -> anyhow::Result<LocalParseR
             },
         })
     }
-    #[cfg(not(feature = "desktop"))]
+    #[cfg(not(sqlite_mode))]
     {
         let _ = (data, filename);
         anyhow::bail!("PDF processing not available in this build")
@@ -112,7 +112,7 @@ fn parse_docx_fallback(data: &[u8], filename: &str) -> anyhow::Result<LocalParse
             },
         })
     }
-    #[cfg(not(feature = "desktop"))]
+    #[cfg(not(sqlite_mode))]
     {
         let _ = (data, filename);
         anyhow::bail!("DOCX processing not available in this build")
