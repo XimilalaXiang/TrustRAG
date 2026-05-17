@@ -174,7 +174,7 @@ pub async fn fulltext_search(
 // SQLite (desktop) implementation
 // ============================================================
 
-#[cfg(feature = "desktop")]
+#[cfg(sqlite_mode)]
 pub async fn vector_search(
     pool: &DbPool,
     workspace_id: Uuid,
@@ -236,7 +236,7 @@ pub async fn vector_search(
     Ok(scored)
 }
 
-#[cfg(feature = "desktop")]
+#[cfg(sqlite_mode)]
 fn cosine_similarity(a: &[f32], b: &[f32]) -> f64 {
     if a.len() != b.len() || a.is_empty() {
         return 0.0;
@@ -255,7 +255,7 @@ fn cosine_similarity(a: &[f32], b: &[f32]) -> f64 {
     if denom == 0.0 { 0.0 } else { dot / denom }
 }
 
-#[cfg(feature = "desktop")]
+#[cfg(sqlite_mode)]
 pub async fn fulltext_search(
     pool: &DbPool,
     workspace_id: Uuid,

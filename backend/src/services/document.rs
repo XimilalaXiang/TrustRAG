@@ -133,7 +133,7 @@ async fn parse_document(
     ))
 }
 
-#[cfg(feature = "desktop")]
+#[cfg(sqlite_mode)]
 async fn parse_document(
     file_bytes: &[u8],
     filename: &str,

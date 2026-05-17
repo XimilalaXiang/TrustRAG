@@ -68,7 +68,7 @@ fn parse_html(data: &[u8], filename: &str) -> anyhow::Result<LocalParseResult> {
 }
 
 fn parse_pdf_fallback(data: &[u8], filename: &str) -> anyhow::Result<LocalParseResult> {
-    #[cfg(feature = "desktop")]
+    #[cfg(sqlite_mode)]
     {
         let _ = data;
         Ok(LocalParseResult {
@@ -94,7 +94,7 @@ fn parse_pdf_fallback(data: &[u8], filename: &str) -> anyhow::Result<LocalParseR
 }
 
 fn parse_docx_fallback(data: &[u8], filename: &str) -> anyhow::Result<LocalParseResult> {
-    #[cfg(feature = "desktop")]
+    #[cfg(sqlite_mode)]
     {
         let _ = data;
         Ok(LocalParseResult {

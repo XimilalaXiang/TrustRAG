@@ -202,7 +202,7 @@ pub async fn store_chunk_embeddings(
         }
     }
 
-    #[cfg(feature = "desktop")]
+    #[cfg(sqlite_mode)]
     {
         for (chunk_id, embedding) in chunk_ids.iter().zip(embeddings.iter()) {
             let blob = embedding_to_blob(embedding);
@@ -217,12 +217,12 @@ pub async fn store_chunk_embeddings(
     Ok(())
 }
 
-#[cfg(feature = "desktop")]
+#[cfg(sqlite_mode)]
 fn embedding_to_blob(embedding: &[f32]) -> Vec<u8> {
     embedding.iter().flat_map(|f| f.to_le_bytes()).collect()
 }
 
-#[cfg(feature = "desktop")]
+#[cfg(sqlite_mode)]
 pub fn blob_to_embedding(blob: &[u8]) -> Vec<f32> {
     blob.chunks_exact(4)
         .map(|chunk| f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]))

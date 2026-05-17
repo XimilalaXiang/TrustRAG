@@ -12,3 +12,6 @@ GeneratedPluginRegistrant.java
 key.properties
 **/*.keystore
 **/*.jks
+
+# Rust backend native libs (built by CI)
+app/src/main/jniLibs/

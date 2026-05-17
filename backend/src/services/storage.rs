@@ -27,7 +27,7 @@ impl StorageService {
         })
     }
 
-    #[cfg(feature = "desktop")]
+    #[cfg(sqlite_mode)]
     pub fn new(config: &AppConfig) -> anyhow::Result<Self> {
         let storage_dir = format!("{}/files", config.data_dir);
         std::fs::create_dir_all(&storage_dir)?;

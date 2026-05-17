@@ -160,6 +160,30 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+
+      - name: Install cargo-ndk
+        run: cargo install cargo-ndk
+
+      - name: Setup Android NDK
+        uses: nttld/setup-ndk@v1
+        id: setup-ndk
+        with:
+          ndk-version: r27c
+
+      - name: Build Rust backend for Android (arm64)
+        working-directory: backend
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+        run: cargo ndk -t arm64-v8a build --release --no-default-features --features mobile
+
+      - name: Bundle backend into Android jniLibs
+        run: |
+          mkdir -p apps/client/android/app/src/main/jniLibs/arm64-v8a
+          cp backend/target/aarch64-linux-android/release/trustrag-backend apps/client/android/app/src/main/jniLibs/arm64-v8a/libtrustrap_backend.so
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin

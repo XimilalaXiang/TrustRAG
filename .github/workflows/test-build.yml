@@ -34,6 +34,10 @@ jobs:
         working-directory: backend
         run: cargo check --features postgres
 
+      - name: Check backend (mobile)
+        working-directory: backend
+        run: cargo check --no-default-features --features mobile
+
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
@@ -151,6 +155,35 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        if: matrix.name == 'android'
+        with:
+          targets: aarch64-linux-android
+
+      - name: Install cargo-ndk (Android)
+        if: matrix.name == 'android'
+        run: cargo install cargo-ndk
+
+      - name: Setup Android NDK
+        if: matrix.name == 'android'
+        uses: nttld/setup-ndk@v1
+        id: setup-ndk
+        with:
+          ndk-version: r27c
+
+      - name: Build Rust backend for Android (arm64)
+        if: matrix.name == 'android'
+        working-directory: backend
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+        run: cargo ndk -t arm64-v8a build --release --no-default-features --features mobile
+
+      - name: Bundle backend into Android jniLibs
+        if: matrix.name == 'android'
+        run: |
+          mkdir -p apps/client/android/app/src/main/jniLibs/arm64-v8a
+          cp backend/target/aarch64-linux-android/release/trustrag-backend apps/client/android/app/src/main/jniLibs/arm64-v8a/libtrustrap_backend.so
 
       - uses: subosito/flutter-action@v2
         with:

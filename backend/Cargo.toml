@@ -9,6 +9,7 @@ license = "Apache-2.0"
 default = ["postgres"]
 postgres = ["sqlx/postgres", "opendal/services-s3"]
 desktop = ["sqlx/sqlite", "opendal/services-fs", "usearch"]
+mobile = ["sqlx/sqlite", "opendal/services-fs"]
 
 [dependencies]
 axum = { version = "0.8", features = ["macros", "multipart"] }

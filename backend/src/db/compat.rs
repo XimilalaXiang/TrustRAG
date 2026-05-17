@@ -13,7 +13,7 @@ pub fn current_timestamp_sql() -> &'static str {
     "now()"
 }
 
-#[cfg(feature = "desktop")]
+#[cfg(sqlite_mode)]
 pub fn current_timestamp_sql() -> &'static str {
     "strftime('%Y-%m-%dT%H:%M:%fZ', 'now')"
 }

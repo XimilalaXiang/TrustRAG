@@ -16,7 +16,7 @@ pub struct AppConfig {
     pub minio_bucket: String,
     #[cfg(feature = "postgres")]
     pub minio_region: String,
-    #[cfg(feature = "desktop")]
+    #[cfg(sqlite_mode)]
     pub data_dir: String,
     pub jwt_secret: String,
     pub doc_processor_url: String,
@@ -43,7 +43,7 @@ impl AppConfig {
             .set_default("minio_bucket", "trustrag")?
             .set_default("minio_region", "us-east-1")?;
 
-        #[cfg(feature = "desktop")]
+        #[cfg(sqlite_mode)]
         let builder = {
             let data_dir = Self::default_data_dir();
             builder
@@ -55,7 +55,7 @@ impl AppConfig {
         Ok(config.try_deserialize()?)
     }
 
-    #[cfg(feature = "desktop")]
+    #[cfg(sqlite_mode)]
     fn default_data_dir() -> String {
         directories::ProjectDirs::from("com", "trustrag", "TrustRAG")
             .map(|dirs| dirs.data_dir().to_string_lossy().into_owned())

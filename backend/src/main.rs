@@ -34,14 +34,14 @@ fn init_logging() {
     }
 }
 
-#[cfg(feature = "desktop")]
+#[cfg(sqlite_mode)]
 async fn ensure_data_dir(config: &config::AppConfig) -> anyhow::Result<()> {
     std::fs::create_dir_all(&config.data_dir)?;
     tracing::info!(data_dir = %config.data_dir, "Data directory ready");
     Ok(())
 }
 
-#[cfg(feature = "desktop")]
+#[cfg(sqlite_mode)]
 async fn run_sqlite_migrations(pool: &sqlx::SqlitePool) -> anyhow::Result<()> {
     use sqlx::Executor;
     let sql = include_str!("../migrations_sqlite/init.sql");
@@ -62,7 +62,7 @@ async fn main() -> anyhow::Result<()> {
     let config = config::AppConfig::load()?;
     tracing::info!(listen_addr = %config.listen_addr, "Configuration loaded");
 
-    #[cfg(feature = "desktop")]
+    #[cfg(sqlite_mode)]
     ensure_data_dir(&config).await?;
 
     let pool = db::create_pool(&config.database_url).await?;
@@ -74,7 +74,7 @@ async fn main() -> anyhow::Result<()> {
         tracing::info!("Database migrations completed");
     }
 
-    #[cfg(feature = "desktop")]
+    #[cfg(sqlite_mode)]
     run_sqlite_migrations(&pool).await?;
 
     let storage = StorageService::new(&config)?;

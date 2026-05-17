@@ -23,7 +23,7 @@ class BackendManager {
   /// Whether this platform should run an embedded backend.
   static bool get shouldRunEmbedded {
     if (kIsWeb) return false;
-    return Platform.isWindows || Platform.isLinux || Platform.isMacOS;
+    return Platform.isWindows || Platform.isLinux || Platform.isMacOS || Platform.isAndroid;
   }
 
   Future<void> start() async {
@@ -122,11 +122,14 @@ class BackendManager {
   }
 
   Future<String?> _findBackendBinary() async {
+    if (Platform.isAndroid) {
+      return _findAndroidBinary();
+    }
+
     final binaryName = Platform.isWindows
         ? 'trustrag-backend.exe'
         : 'trustrag-backend';
 
-    // Check relative to the app executable
     final exeDir = p.dirname(Platform.resolvedExecutable);
     final candidates = [
       p.join(exeDir, binaryName),
@@ -145,14 +148,44 @@ class BackendManager {
     return null;
   }
 
+  Future<String?> _findAndroidBinary() async {
+    // On Android, the native library is bundled in the APK's lib directory.
+    // Flutter loads native libs from the app's nativeLibraryDir.
+    // We named it libtrustrap_backend.so to satisfy Android's lib naming convention.
+    const libName = 'libtrustrap_backend.so';
+    final appInfo = await getApplicationSupportDirectory();
+    final nativeLibDir = p.join(p.dirname(p.dirname(appInfo.path)), 'lib');
+
+    final candidates = [
+      p.join(nativeLibDir, libName),
+      '/data/data/com.trustrag.app/lib/$libName',
+    ];
+
+    for (final candidate in candidates) {
+      if (await File(candidate).exists()) {
+        debugPrint('[BackendManager] Found Android binary: $candidate');
+        return candidate;
+      }
+    }
+
+    // Fallback: search the app's native library path via resolvedExecutable parent
+    final exeDir = p.dirname(Platform.resolvedExecutable);
+    final fallback = p.join(exeDir, '..', 'lib', libName);
+    if (await File(fallback).exists()) {
+      return fallback;
+    }
+
+    return null;
+  }
+
   Future<String> _getDataDir() async {
     final appSupport = await getApplicationSupportDirectory();
     return p.join(appSupport.path, 'TrustRAG');
   }
 
   String _generateJwtSecret() {
-    // Deterministic per installation (based on data dir path hash)
-    final seed = Platform.localHostname + Platform.operatingSystem;
+    final hostname = Platform.isAndroid ? 'android-device' : Platform.localHostname;
+    final seed = hostname + Platform.operatingSystem;
     return seed.hashCode.toRadixString(36).padLeft(32, 'x');
   }
 }
