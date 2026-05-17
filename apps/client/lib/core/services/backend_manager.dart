@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
@@ -9,6 +10,8 @@ class BackendManager {
   static final BackendManager _instance = BackendManager._();
   factory BackendManager() => _instance;
   BackendManager._();
+
+  static const _channel = MethodChannel('com.trustrag.app/native');
 
   Process? _process;
   int? _port;
@@ -62,7 +65,7 @@ class BackendManager {
         backendPath,
         [],
         environment: env,
-        workingDirectory: p.dirname(backendPath),
+        workingDirectory: Platform.isAndroid ? dataDir : p.dirname(backendPath),
       );
 
       _process!.stdout.listen((data) {
@@ -149,32 +152,40 @@ class BackendManager {
   }
 
   Future<String?> _findAndroidBinary() async {
-    // On Android, the native library is bundled in the APK's lib directory.
-    // Flutter loads native libs from the app's nativeLibraryDir.
-    // We named it libtrustrap_backend.so to satisfy Android's lib naming convention.
     const libName = 'libtrustrap_backend.so';
-    final appInfo = await getApplicationSupportDirectory();
-    final nativeLibDir = p.join(p.dirname(p.dirname(appInfo.path)), 'lib');
 
+    // Primary: get native library directory via platform channel
+    try {
+      final nativeLibDir = await _channel.invokeMethod<String>('getNativeLibraryDir');
+      if (nativeLibDir != null) {
+        final path = p.join(nativeLibDir, libName);
+        debugPrint('[BackendManager] Checking native lib path from channel: $path');
+        if (await File(path).exists()) {
+          debugPrint('[BackendManager] Found Android binary via MethodChannel: $path');
+          return path;
+        }
+      }
+    } catch (e) {
+      debugPrint('[BackendManager] MethodChannel failed: $e');
+    }
+
+    // Fallback: common paths
+    final appInfo = await getApplicationSupportDirectory();
+    final dataDir = p.dirname(p.dirname(appInfo.path));
     final candidates = [
-      p.join(nativeLibDir, libName),
+      p.join(dataDir, 'lib', libName),
       '/data/data/com.trustrag.app/lib/$libName',
     ];
 
     for (final candidate in candidates) {
+      debugPrint('[BackendManager] Checking fallback path: $candidate');
       if (await File(candidate).exists()) {
-        debugPrint('[BackendManager] Found Android binary: $candidate');
+        debugPrint('[BackendManager] Found Android binary at fallback: $candidate');
         return candidate;
       }
     }
 
-    // Fallback: search the app's native library path via resolvedExecutable parent
-    final exeDir = p.dirname(Platform.resolvedExecutable);
-    final fallback = p.join(exeDir, '..', 'lib', libName);
-    if (await File(fallback).exists()) {
-      return fallback;
-    }
-
+    debugPrint('[BackendManager] Android binary NOT found in any path');
     return null;
   }
 
