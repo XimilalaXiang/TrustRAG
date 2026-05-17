@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -16,10 +17,12 @@ class BackendManager {
   Process? _process;
   int? _port;
   bool _isRunning = false;
+  bool _startAttempted = false;
   final _readyCompleter = Completer<void>();
 
   int? get port => _port;
   bool get isRunning => _isRunning;
+  bool get startAttempted => _startAttempted;
   String get baseUrl => 'http://127.0.0.1:$_port';
   Future<void> get ready => _readyCompleter.future;
 
@@ -32,6 +35,7 @@ class BackendManager {
   Future<void> start() async {
     if (!shouldRunEmbedded || _isRunning) return;
 
+    _startAttempted = true;
     _port = await _findFreePort();
     final backendPath = await _findBackendBinary();
 
@@ -88,19 +92,47 @@ class BackendManager {
         _process = null;
       });
 
-      // Wait up to 15 seconds for backend to be ready
       await _readyCompleter.future.timeout(
         const Duration(seconds: 15),
         onTimeout: () {
-          debugPrint('[BackendManager] Backend startup timed out, proceeding anyway');
-          _isRunning = true;
+          debugPrint('[BackendManager] Backend startup timed out, will verify via health check');
           if (!_readyCompleter.isCompleted) _readyCompleter.complete();
         },
       );
     } catch (e) {
-      debugPrint('[BackendManager] Failed to start backend: $e');
+      debugPrint('[BackendManager] Failed to start backend process: $e');
       if (!_readyCompleter.isCompleted) _readyCompleter.complete();
     }
+
+    if (!_isRunning) {
+      _isRunning = await _healthCheck();
+      debugPrint('[BackendManager] Health check result: $_isRunning');
+    }
+  }
+
+  /// HTTP health check to verify the backend is actually responding.
+  Future<bool> _healthCheck() async {
+    final url = Uri.parse('http://127.0.0.1:$_port/health');
+    for (var i = 0; i < 3; i++) {
+      try {
+        final client = HttpClient()
+          ..connectionTimeout = const Duration(seconds: 2);
+        final request = await client.getUrl(url);
+        final response = await request.close().timeout(
+          const Duration(seconds: 3),
+        );
+        final body = await response.transform(utf8.decoder).join();
+        client.close();
+        if (response.statusCode == 200 && body.contains('ok')) {
+          debugPrint('[BackendManager] Health check passed on attempt ${i + 1}');
+          return true;
+        }
+      } catch (e) {
+        debugPrint('[BackendManager] Health check attempt ${i + 1} failed: $e');
+      }
+      if (i < 2) await Future.delayed(const Duration(seconds: 2));
+    }
+    return false;
   }
 
   Future<void> stop() async {

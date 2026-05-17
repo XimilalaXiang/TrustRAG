@@ -16,7 +16,7 @@ void main() async {
   if (BackendManager.shouldRunEmbedded) {
     debugPrint('[App] Starting embedded backend...');
     await BackendManager().start();
-    debugPrint('[App] Backend ready at ${BackendManager().baseUrl}');
+    debugPrint('[App] Backend status: running=${BackendManager().isRunning}, url=${BackendManager().baseUrl}');
   }
 
   runApp(const ProviderScope(child: TrustRAGApp()));

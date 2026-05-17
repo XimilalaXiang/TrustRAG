@@ -47,8 +47,10 @@ class ApiClient {
   }
 
   static String _resolveBaseUrl() {
-    if (BackendManager.shouldRunEmbedded && BackendManager().isRunning) {
-      return BackendManager().baseUrl;
+    if (BackendManager.shouldRunEmbedded) {
+      if (BackendManager().isRunning || BackendManager().startAttempted) {
+        return BackendManager().baseUrl;
+      }
     }
 
     const envUrl = String.fromEnvironment(
