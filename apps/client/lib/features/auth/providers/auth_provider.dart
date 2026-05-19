@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/api/api_client.dart';
+import '../../../core/services/backend_manager.dart';
 import '../../../core/services/desktop_auto_setup.dart';
 
 final apiClientProvider = Provider<ApiClient>((ref) {
@@ -70,6 +71,15 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   Future<bool> login(String email, String password) async {
+    final backend = BackendManager();
+    if (BackendManager.shouldRunEmbedded && backend.hasFailed) {
+      state = state.copyWith(
+        status: AuthStatus.unauthenticated,
+        error: 'Backend not available: ${backend.startupError}',
+      );
+      return false;
+    }
+
     try {
       state = state.copyWith(error: null);
       final resp = await _api.dio.post('/auth/login', data: {
@@ -85,16 +95,32 @@ class AuthNotifier extends StateNotifier<AuthState> {
       );
       return true;
     } on DioException catch (e) {
-      final msg = e.response?.data?['error'] ?? 'Login failed';
+      String msg;
+      if (e.type == DioExceptionType.connectionError ||
+          e.type == DioExceptionType.connectionTimeout) {
+        msg = BackendManager.shouldRunEmbedded && !backend.isRunning
+            ? 'Cannot connect to backend. The embedded server may have failed to start.'
+            : 'Cannot connect to server. Please check your network connection.';
+      } else {
+        msg = (e.response?.data?['error'] ?? 'Login failed').toString();
+      }
       state = state.copyWith(
         status: AuthStatus.unauthenticated,
-        error: msg.toString(),
+        error: msg,
       );
       return false;
     }
   }
 
   Future<bool> register(String name, String email, String password) async {
+    final backend = BackendManager();
+    if (BackendManager.shouldRunEmbedded && backend.hasFailed) {
+      state = state.copyWith(
+        error: 'Backend not available: ${backend.startupError}',
+      );
+      return false;
+    }
+
     try {
       state = state.copyWith(error: null);
       final resp = await _api.dio.post('/auth/register', data: {
@@ -111,8 +137,16 @@ class AuthNotifier extends StateNotifier<AuthState> {
       );
       return true;
     } on DioException catch (e) {
-      final msg = e.response?.data?['error'] ?? 'Registration failed';
-      state = state.copyWith(error: msg.toString());
+      String msg;
+      if (e.type == DioExceptionType.connectionError ||
+          e.type == DioExceptionType.connectionTimeout) {
+        msg = BackendManager.shouldRunEmbedded && !backend.isRunning
+            ? 'Cannot connect to backend. The embedded server may have failed to start.'
+            : 'Cannot connect to server. Please check your network connection.';
+      } else {
+        msg = (e.response?.data?['error'] ?? 'Registration failed').toString();
+      }
+      state = state.copyWith(error: msg);
       return false;
     }
   }
