@@ -18,7 +18,7 @@ logger = logging.getLogger("trustrag.doc-processor")
 
 app = FastAPI(
     title="TrustRAG Document Processor",
-    version="0.1.1",
+    version="0.1.2",
     description="Python sidecar service for document parsing, conversion, and OCR",
 )
 

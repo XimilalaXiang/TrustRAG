@@ -14,6 +14,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.2] - 2026-05-19
+
+### Fixed / 修复
+- 🐛 **Android native library extraction / Android 原生库解压** — Add `android:extractNativeLibs="true"` to AndroidManifest.xml so the embedded Rust backend binary is properly extracted to `nativeLibraryDir` on install. Without this, Android 6+ keeps `.so` files compressed inside the APK, making them inaccessible to `Process.start()`. (Closes #5)
+- 🐛 **Android 原生库解压** — 在 AndroidManifest.xml 中添加 `android:extractNativeLibs="true"`，确保嵌入式 Rust 后端二进制文件在安装时正确解压到 `nativeLibraryDir`。缺少此设置时，Android 6+ 会将 `.so` 文件压缩保存在 APK 内，导致 `Process.start()` 无法访问。（修复 #5）
+- 🐛 **Improved error reporting / 改进错误提示** — Login and register now show actionable error messages (e.g. "Cannot connect to backend") instead of generic "Login failed" / "Registration failed" when the embedded backend is unavailable.
+- 🐛 **改进错误提示** — 登录和注册在嵌入式后端不可用时，显示可操作的错误信息（如"无法连接到后端"），而非泛化的"登录失败"/"注册失败"。
+- 🐛 **Backend health check / 后端健康检查** — BackendManager now performs HTTP health checks after startup to verify the backend is actually responding, with retry logic.
+- 🐛 **后端健康检查** — BackendManager 启动后执行 HTTP 健康检查验证后端是否正常响应，支持重试逻辑。
+
+---
+
 ## [0.1.1] - 2026-05-16
 
 ### Added / 新增

@@ -371,7 +371,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                 child: ListTile(
                   leading: const Icon(Icons.info_outline),
                   title: const Text('关于'),
-                  subtitle: const Text('TrustRAG v0.1.1'),
+                  subtitle: const Text('TrustRAG v0.1.2'),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => _showAboutDialog(),
                 ),
@@ -566,7 +566,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
             const Text('TrustRAG - 可信赖的 RAG 知识工作台',
                 style: TextStyle(fontWeight: FontWeight.w600)),
             const SizedBox(height: 12),
-            _infoRow('版本', 'v0.1.1'),
+            _infoRow('版本', 'v0.1.2'),
             const SizedBox(height: 4),
             _infoRow('后端', 'Rust (Axum)'),
             const SizedBox(height: 4),
