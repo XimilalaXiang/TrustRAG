@@ -16,10 +16,13 @@ class BackendManager {
   Process? _process;
   int? _port;
   bool _isRunning = false;
+  String? _startupError;
   final _readyCompleter = Completer<void>();
 
   int? get port => _port;
   bool get isRunning => _isRunning;
+  String? get startupError => _startupError;
+  bool get hasFailed => _startupError != null;
   String get baseUrl => 'http://127.0.0.1:$_port';
   Future<void> get ready => _readyCompleter.future;
 
@@ -36,7 +39,13 @@ class BackendManager {
     final backendPath = await _findBackendBinary();
 
     if (backendPath == null) {
-      debugPrint('[BackendManager] Backend binary not found, skipping embedded mode');
+      _startupError = Platform.isAndroid
+          ? 'Embedded backend binary not found. '
+            'This may be caused by missing android:extractNativeLibs="true" '
+            'in AndroidManifest.xml, or the APK was not built with the backend.'
+          : 'Embedded backend binary not found. '
+            'The backend executable may not be bundled with this build.';
+      debugPrint('[BackendManager] $_startupError');
       if (!_readyCompleter.isCompleted) _readyCompleter.complete();
       return;
     }
@@ -98,7 +107,8 @@ class BackendManager {
         },
       );
     } catch (e) {
-      debugPrint('[BackendManager] Failed to start backend: $e');
+      _startupError = 'Failed to start embedded backend: $e';
+      debugPrint('[BackendManager] $_startupError');
       if (!_readyCompleter.isCompleted) _readyCompleter.complete();
     }
   }
